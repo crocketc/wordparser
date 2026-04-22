@@ -24,7 +24,8 @@
       "Bash(python -m pytest tests/test_postprocess.py -v --tb=short)",
       "Bash(python -m pytest tests/test_tables.py -v)",
       "Bash(python -m pytest tests/test_images.py -v)",
-      "Bash(python -m pytest tests/test_client.py -v)"
+      "Bash(python -m pytest tests/test_client.py -v)",
+      "Bash(python -c \"from wordparser.multimodal.prompts import TABLE_PROMPT, IMAGE_PROMPT, CHART_PROMPT, SMARTART_PROMPT; print\\('TABLE_PROMPT:', TABLE_PROMPT[:50]\\); print\\('IMAGE_PROMPT:', IMAGE_PROMPT[:50]\\); print\\('CHART_PROMPT:', CHART_PROMPT[:50]\\); print\\('SMARTART_PROMPT:', SMARTART_PROMPT[:50]\\)\")"
     ]
   }
 }
