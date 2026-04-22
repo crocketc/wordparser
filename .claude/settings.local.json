@@ -38,7 +38,9 @@
       "Bash(python -m pytest tests/test_parser.py::TestWordParser::test_init_with_default_config -xvs)",
       "Bash(python -m pytest tests/test_parser.py -v --tb=short)",
       "Bash(python -m pytest tests/test_parser.py -v --tb=line)",
-      "Bash(git commit -m 'Task 16: WordParser主解析器 *)"
+      "Bash(git commit -m 'Task 16: WordParser主解析器 *)",
+      "Bash(python -m pytest tests/test_cli.py -v)",
+      "Bash(git commit -m 'Task 17: CLI工具 *)"
     ]
   }
 }
