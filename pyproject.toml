@@ -2,12 +2,17 @@
 name = "wordparser"
 version = "0.1.0"
 description = "Word文档转Markdown解析库"
+license = "MIT"
 requires-python = ">=3.10"
 
 dependencies = [
     "python-docx>=1.0",
     "httpx>=0.24",
     "pydantic>=2.0",
+    # pdf2image requires system-level poppler library:
+    #   Windows: choco install poppler  or  conda install -c conda-forge poppler
+    #   macOS:   brew install poppler
+    #   Linux:   sudo apt-get install poppler-utils
     "pdf2image>=1.16",
     "lxml>=4.9",
     "Pillow>=10.0",
@@ -23,6 +28,7 @@ dev = [
     "pytest-cov",
 ]
 
+# CLI entry point - wordparser_cli.main module will be implemented in Task 17
 [project.scripts]
 wordparser = "wordparser_cli.main:app"
 

@@ -4,6 +4,6 @@ from pathlib import Path
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "samples"
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def fixtures_dir():
     return FIXTURES_DIR
