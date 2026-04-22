@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from wordparser.config import ParserConfig
+from wordparser.config import ParserConfig
 from wordparser.core.formulas import FormulaProcessor
-from wordparser.core.images import ImageExtractor
 from wordparser.core.models import ParsedDocument
 from wordparser.core.postprocess import PostProcessor
 from wordparser.core.preprocessor import Preprocessor
@@ -21,16 +21,14 @@ from wordparser.exceptions import DocumentError, WordParserError
 class WordParser:
     """Word文档转Markdown解析器"""
 
-    def __init__(self, config: ParserConfig | None = None, output_dir: str | None = None) -> None:
+    def __init__(self, config: ParserConfig | None = None) -> None:
         """
         初始化解析器
 
         Args:
             config: 解析器配置，默认使用默认配置
-            output_dir: 图片输出目录，默认为None（不保存图片）
         """
         self.config = config or ParserConfig()
-        self.output_dir = output_dir
         self._init_components()
 
     def _init_components(self) -> None:
@@ -42,12 +40,15 @@ class WordParser:
         self.toc_generator = TOCGenerator()
         self.postprocessor = PostProcessor()
 
-        # 初始化图片提取器（如果指定了输出目录）
-        self.image_extractor = None
-        if self.output_dir:
-            from pathlib import Path
-            images_dir = Path(self.output_dir) / "images"
-            self.image_extractor = ImageExtractor(images_dir)
+        # 初始化多模态视觉客户端（如果配置了）
+        self.vision_client = None
+        if self.config.multimodal:
+            from wordparser.multimodal.client import OpenAICompatibleVisionClient
+            self.vision_client = OpenAICompatibleVisionClient(
+                base_url=self.config.multimodal.model.base_url,
+                model=self.config.multimodal.model.model,
+                temperature=self.config.multimodal.model.temperature,
+            )
 
     def parse(self, docx_path: str | Path) -> str:
         """
@@ -117,10 +118,23 @@ class WordParser:
             blocks = self.structure_parser.parse(doc)
             title_tree = self.structure_parser.get_title_tree()
 
-            # 3. 提取图片（如果配置了图片提取器）
-            images = []
-            if self.image_extractor:
-                images = self.image_extractor.extract(doc, image_prefix=f"{docx_path.stem}_image")
+            # 3. 提取图片并解析（零持久化）
+            image_descriptions = []
+            if self.vision_client:
+                from wordparser.multimodal.prompts import IMAGE_PROMPT
+
+                for rel in doc.part.rels.values():
+                    if "image" in rel.target_ref:
+                        image_bytes = rel.target_part.blob
+
+                        try:
+                            description = self.vision_client.parse_from_bytes(
+                                image_bytes,
+                                IMAGE_PROMPT,
+                            )
+                            image_descriptions.append(description)
+                        except Exception as e:
+                            image_descriptions.append(f"[图片解析失败: {e}]")
 
             # 4. 构建文档对象
             document = ParsedDocument(
@@ -128,8 +142,8 @@ class WordParser:
                     "docx_path": str(docx_path),
                     "word_count": sum(len(p.text) for p in doc.paragraphs),
                     "paragraph_count": len(doc.paragraphs),
-                    "image_count": len(images),
-                    "images": images,
+                    "image_count": len(image_descriptions),
+                    "image_descriptions": image_descriptions,
                 },
                 title_tree=title_tree,
                 content_blocks=blocks,
@@ -147,13 +161,12 @@ class WordParser:
                 elif block.type.value == "list":
                     markdown_lines.append(f"- {block.content}\n")
 
-            # 6. 添加图片引用
-            images = document.metadata.get("images", [])
-            if images:
-                markdown_lines.append("\n## 图片\n\n")
-                for img in images:
-                    rel_path = Path(img["path"]).relative_to(Path(self.output_dir))
-                    markdown_lines.append(f"![图片{img['index']}]({rel_path})\n")
+            # 6. 添加图片描述（零持久化）
+            image_descriptions = document.metadata.get("image_descriptions", [])
+            if image_descriptions:
+                markdown_lines.append("\n## 图片内容\n\n")
+                for i, desc in enumerate(image_descriptions):
+                    markdown_lines.append(f"### 图片 {i + 1}\n\n{desc}\n\n")
 
             markdown = "\n".join(markdown_lines)
 
