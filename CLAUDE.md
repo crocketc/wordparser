@@ -311,8 +311,7 @@ config = ParserConfig(
         max_concurrent=4,
         model=VisionModelConfig(
             base_url="http://localhost:1234/v1",
-            model="qwen3.5-9b",  # 或其他可用模型
-            timeout=60,
+            # model="qwen3-vl-8b-instruct",  # 默认值，可省略
         ),
     ),
 )
@@ -320,9 +319,10 @@ config = ParserConfig(
 
 ### 可用模型
 
-- qwen3.5-9b（推荐）
-- qwen3-vl-8b-instruct
-- 其他 LM Studio 支持的视觉模型
+- **qwen3-vl-8b-instruct**（推荐默认，Vision-Language 多模态模型）
+- qwen3.5-9b（纯文本模型，不支持视觉）
+- qwen3.6-35b-a3b（纯文本模型）
+- 其他 LM Studio 支持的视觉模型（vl 系列）
 
 ---
 
