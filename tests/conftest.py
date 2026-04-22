@@ -64,3 +64,34 @@ def docx_with_numbered_headings(tmp_path):
     path = tmp_path / "numbered.docx"
     doc.save(str(path))
     return path
+
+
+@pytest.fixture
+def docx_with_table(tmp_path):
+    """包含表格的Word文档"""
+    doc = Document()
+    doc.add_heading("表格测试", level=1)
+
+    # 添加表格
+    table = doc.add_table(rows=3, cols=3)
+    table.style = 'Table Grid'
+
+    # 填充表头
+    table.rows[0].cells[0].text = "姓名"
+    table.rows[0].cells[1].text = "年龄"
+    table.rows[0].cells[2].text = "职位"
+
+    # 填充数据
+    table.rows[1].cells[0].text = "张三"
+    table.rows[1].cells[1].text = "28"
+    table.rows[1].cells[2].text = "工程师"
+
+    table.rows[2].cells[0].text = "李四"
+    table.rows[2].cells[1].text = "32"
+    table.rows[2].cells[2].text = "经理"
+
+    doc.add_paragraph("表格说明文字")
+
+    path = tmp_path / "table.docx"
+    doc.save(str(path))
+    return path
