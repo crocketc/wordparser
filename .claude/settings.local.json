@@ -40,7 +40,10 @@
       "Bash(python -m pytest tests/test_parser.py -v --tb=line)",
       "Bash(git commit -m 'Task 16: WordParser主解析器 *)",
       "Bash(python -m pytest tests/test_cli.py -v)",
-      "Bash(git commit -m 'Task 17: CLI工具 *)"
+      "Bash(git commit -m 'Task 17: CLI工具 *)",
+      "Bash(cmd.exe /c \"wordparser.bat --help\")",
+      "Bash(python -m wordparser_cli.main --help)",
+      "Bash(git commit -m 'Task 18: BAT启动脚本 *)"
     ]
   }
 }
