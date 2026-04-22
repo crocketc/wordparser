@@ -25,44 +25,51 @@ if errorlevel 1 (
     echo.
 )
 
-REM 检查是否传入了文件参数（拖拽或命令行参数）
+REM 如果没有传入参数，提示用户输入
 if "%~1"=="" (
     echo ========================================
     echo  WordParser - Word文档转Markdown工具
     echo ========================================
     echo.
-    echo 使用方法:
-    echo   1. 拖拽Word文档到这个图标上
-    echo   2. 或者在命令行中运行: wordparser.bat 文档.docx
+    echo 请输入Word文档路径，或直接拖拽文件到这个窗口：
     echo.
-    echo 示例:
-    echo   wordparser.bat document.docx
-    echo   wordparser.bat document.docx -o output.md
-    echo.
-    pause
-    exit /b 0
+    set /p DOCX_PATH="文件路径: "
+
+    REM 检查用户是否输入了内容
+    if "!DOCX_PATH!"=="" (
+        echo 未输入文件路径，退出。
+        pause
+        exit /b 0
+    )
+
+    REM 去除路径两端的引号（如果有）
+    set "DOCX_PATH=!DOCX_PATH:"=!"
+) else (
+    REM 使用传入的参数
+    set "DOCX_PATH=%~1"
 )
 
 REM 检查文件是否存在
-if not exist "%~1" (
-    echo 错误: 文件不存在: %~1
+if not exist "!DOCX_PATH!" (
+    echo 错误: 文件不存在: !DOCX_PATH!
     pause
     exit /b 1
 )
 
 REM 检查文件扩展名
-echo "%~1" | findstr /i "\.docx$" >nul
+echo "!DOCX_PATH!" | findstr /i "\.docx$" >nul
 if errorlevel 1 (
     echo 错误: 不支持的文件格式，请使用 .docx 文件
     pause
     exit /b 1
 )
 
-echo 正在解析: %~1
+echo.
+echo 正在解析: !DOCX_PATH!
 echo.
 
-REM 运行 WordParser CLI，传递所有参数
-python -m wordparser_cli.main parse %*
+REM 运行 WordParser CLI
+python -m wordparser_cli.main parse "!DOCX_PATH!" %~2 %~3 %~4 %~5
 
 if errorlevel 1 (
     echo.
