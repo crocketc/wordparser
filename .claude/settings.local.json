@@ -48,7 +48,20 @@
       "Bash(python -c \"import examples.advanced_config; print\\('advanced_config.py 导入成功'\\)\")",
       "Bash(git commit -m 'Task 19: 使用示例 *)",
       "Bash(python -m pytest tests/test_integration.py -v)",
-      "Bash(git commit -m 'Task 20: 集成测试 *)"
+      "Bash(git commit -m 'Task 20: 集成测试 *)",
+      "Bash(python -m pytest tests/ -v --tb=short)",
+      "Bash(python -m pytest tests/ -q --tb=no)",
+      "Bash(python -m wordparser_cli.main version)",
+      "Bash(pytest tests/ -v --tb=short)",
+      "Bash(python -m wordparser_cli.main parse --help)",
+      "Bash(python examples/basic_usage.py)",
+      "Bash(python -m wordparser_cli.main parse cli_test.docx -o cli_output.md)",
+      "Bash(python -m wordparser_cli.main parse cli_test.docx -o cli_output.md -v)",
+      "Bash(cmd /c wordparser.bat parse cli_test.docx -o bat_output.md)",
+      "Bash(python -c \"import wordparser; print\\('wordparser已安装'\\)\")",
+      "Bash(rm -f cli_test.docx cli_output.md)",
+      "Bash(ls *.docx *.md)",
+      "Bash(python -m wordparser_cli.main parse \"交互测试.docx\" -o \"交互测试输出.md\" -v)"
     ]
   }
 }
