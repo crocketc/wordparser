@@ -37,3 +37,6 @@ class Preprocessor:
         将多余空白折叠为单个空格。因此最终效果是完整的空白归一化，但本方法
         单独使用时并不保证这一点。
         """
+        for para in doc.paragraphs:
+            for run in para.runs:
+                run.text = run.text.strip()
