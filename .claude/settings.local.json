@@ -43,7 +43,10 @@
       "Bash(git commit -m 'Task 17: CLI工具 *)",
       "Bash(cmd.exe /c \"wordparser.bat --help\")",
       "Bash(python -m wordparser_cli.main --help)",
-      "Bash(git commit -m 'Task 18: BAT启动脚本 *)"
+      "Bash(git commit -m 'Task 18: BAT启动脚本 *)",
+      "Bash(python -c \"import examples.basic_usage; print\\('basic_usage.py 导入成功'\\)\")",
+      "Bash(python -c \"import examples.advanced_config; print\\('advanced_config.py 导入成功'\\)\")",
+      "Bash(git commit -m 'Task 19: 使用示例 *)"
     ]
   }
 }
