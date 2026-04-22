@@ -23,7 +23,8 @@
       "Bash(python -m pytest tests/test_structure.py -v)",
       "Bash(python -m pytest tests/test_postprocess.py -v --tb=short)",
       "Bash(python -m pytest tests/test_tables.py -v)",
-      "Bash(python -m pytest tests/test_images.py -v)"
+      "Bash(python -m pytest tests/test_images.py -v)",
+      "Bash(python -m pytest tests/test_client.py -v)"
     ]
   }
 }
