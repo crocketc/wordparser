@@ -7,6 +7,7 @@ from typing import Any
 
 from wordparser.config import ParserConfig
 from wordparser.core.formulas import FormulaProcessor
+from wordparser.core.images import ImageExtractor
 from wordparser.core.models import ParsedDocument
 from wordparser.core.postprocess import PostProcessor
 from wordparser.core.preprocessor import Preprocessor
@@ -20,14 +21,16 @@ from wordparser.exceptions import DocumentError, WordParserError
 class WordParser:
     """Word文档转Markdown解析器"""
 
-    def __init__(self, config: ParserConfig | None = None) -> None:
+    def __init__(self, config: ParserConfig | None = None, output_dir: str | None = None) -> None:
         """
         初始化解析器
 
         Args:
             config: 解析器配置，默认使用默认配置
+            output_dir: 图片输出目录，默认为None（不保存图片）
         """
         self.config = config or ParserConfig()
+        self.output_dir = output_dir
         self._init_components()
 
     def _init_components(self) -> None:
@@ -38,6 +41,13 @@ class WordParser:
         self.formula_processor = FormulaProcessor()
         self.toc_generator = TOCGenerator()
         self.postprocessor = PostProcessor()
+
+        # 初始化图片提取器（如果指定了输出目录）
+        self.image_extractor = None
+        if self.output_dir:
+            from pathlib import Path
+            images_dir = Path(self.output_dir) / "images"
+            self.image_extractor = ImageExtractor(images_dir)
 
     def parse(self, docx_path: str | Path) -> str:
         """
@@ -107,18 +117,25 @@ class WordParser:
             blocks = self.structure_parser.parse(doc)
             title_tree = self.structure_parser.get_title_tree()
 
-            # 3. 构建文档对象
+            # 3. 提取图片（如果配置了图片提取器）
+            images = []
+            if self.image_extractor:
+                images = self.image_extractor.extract(doc, image_prefix=f"{docx_path.stem}_image")
+
+            # 4. 构建文档对象
             document = ParsedDocument(
                 metadata={
                     "docx_path": str(docx_path),
                     "word_count": sum(len(p.text) for p in doc.paragraphs),
                     "paragraph_count": len(doc.paragraphs),
+                    "image_count": len(images),
+                    "images": images,
                 },
                 title_tree=title_tree,
                 content_blocks=blocks,
             )
 
-            # 4. 生成Markdown
+            # 5. 生成Markdown
             markdown_lines = []
             for block in blocks:
                 if block.type.value == "heading":
@@ -130,9 +147,17 @@ class WordParser:
                 elif block.type.value == "list":
                     markdown_lines.append(f"- {block.content}\n")
 
+            # 6. 添加图片引用
+            images = document.metadata.get("images", [])
+            if images:
+                markdown_lines.append("\n## 图片\n\n")
+                for img in images:
+                    rel_path = Path(img["path"]).relative_to(Path(self.output_dir))
+                    markdown_lines.append(f"![图片{img['index']}]({rel_path})\n")
+
             markdown = "\n".join(markdown_lines)
 
-            # 5. 后处理
+            # 7. 后处理
             markdown = self.postprocessor.process(markdown)
             document.metadata["markdown"] = markdown
 
@@ -171,7 +196,7 @@ class WordParser:
             total_headings=heading_count,
             total_paragraphs=metadata.get("paragraph_count", 0),
             total_tables=0,  # 暂未实现
-            total_images=0,  # 暂未实现
+            total_images=metadata.get("image_count", 0),
             multimodal_calls=0,
             multimodal_failures=0,
             processing_time=0.0,

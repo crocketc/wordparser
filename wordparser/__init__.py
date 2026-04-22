@@ -48,11 +48,18 @@ def parse_word_to_markdown(
         >>> print(md_content)
         >>> print(f"解析成功: {report.success}")
     """
-    parser = WordParser(config)
+    from pathlib import Path
+
+    docx_path = Path(docx_path)
+    output_dir = None
+    if output_path:
+        output_path = Path(output_path)
+        output_dir = str(output_path.parent)
+
+    parser = WordParser(config, output_dir=output_dir)
     markdown, report = parser.parse_with_report(docx_path)
 
     if output_path:
-        output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(markdown, encoding=config.encoding if config else "utf-8")
         report.output_path = output_path
