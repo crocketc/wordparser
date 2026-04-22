@@ -25,7 +25,20 @@
       "Bash(python -m pytest tests/test_tables.py -v)",
       "Bash(python -m pytest tests/test_images.py -v)",
       "Bash(python -m pytest tests/test_client.py -v)",
-      "Bash(python -c \"from wordparser.multimodal.prompts import TABLE_PROMPT, IMAGE_PROMPT, CHART_PROMPT, SMARTART_PROMPT; print\\('TABLE_PROMPT:', TABLE_PROMPT[:50]\\); print\\('IMAGE_PROMPT:', IMAGE_PROMPT[:50]\\); print\\('CHART_PROMPT:', CHART_PROMPT[:50]\\); print\\('SMARTART_PROMPT:', SMARTART_PROMPT[:50]\\)\")"
+      "Bash(python -c \"from wordparser.multimodal.prompts import TABLE_PROMPT, IMAGE_PROMPT, CHART_PROMPT, SMARTART_PROMPT; print\\('TABLE_PROMPT:', TABLE_PROMPT[:50]\\); print\\('IMAGE_PROMPT:', IMAGE_PROMPT[:50]\\); print\\('CHART_PROMPT:', CHART_PROMPT[:50]\\); print\\('SMARTART_PROMPT:', SMARTART_PROMPT[:50]\\)\")",
+      "Bash(python -m pytest tests/test_tables.py tests/test_images.py tests/test_client.py -v)",
+      "Bash(python -m pytest tests/test_multimodal.py -v)",
+      "Bash(python -m pytest tests/test_multimodal.py::TestMultimodalParser::test_parse_table -v)",
+      "Bash(python -m pytest tests/test_multimodal.py::TestParallelMultimodalProcessor -v)",
+      "Bash(python -m pytest tests/test_toc.py -v)",
+      "Bash(python -m pytest tests/test_formulas.py -v)",
+      "Bash(python -m pytest tests/test_multimodal.py tests/test_toc.py tests/test_formulas.py -v --tb=short)",
+      "Bash(python -m pytest tests/test_parser.py -v)",
+      "Bash(python -m pytest tests/test_parser.py -v -x)",
+      "Bash(python -m pytest tests/test_parser.py::TestWordParser::test_init_with_default_config -xvs)",
+      "Bash(python -m pytest tests/test_parser.py -v --tb=short)",
+      "Bash(python -m pytest tests/test_parser.py -v --tb=line)",
+      "Bash(git commit -m 'Task 16: WordParser主解析器 *)"
     ]
   }
 }
