@@ -32,6 +32,7 @@ class ParserConfig:
     encoding: str = "utf-8"
     multimodal: MultimodalConfig | None = None
     libreoffice_path: str | None = None
+    enable_render_fallback: bool = True
     generate_toc: bool = True
     toc_position: TOCPosition = TOCPosition.AFTER_TITLE
     include_header_footer: bool = False

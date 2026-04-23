@@ -16,6 +16,7 @@ dependencies = [
     "pdf2image>=1.16",
     "lxml>=4.9",
     "Pillow>=10.0",
+    "openpyxl>=3.0",
 ]
 
 [project.optional-dependencies]
