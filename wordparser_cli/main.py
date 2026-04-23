@@ -18,7 +18,7 @@ app = typer.Typer(
 def parse(
     docx_file: str = typer.Argument(
         ...,
-        help="要解析的Word文档路径",
+        help="要解析的Word文档路径（支持 .doc 和 .docx）",
         exists=True,
     ),
     output: Optional[str] = typer.Option(
@@ -40,6 +40,16 @@ def parse(
         4,
         "--max-concurrent",
         help="最大并发请求数",
+    ),
+    render_fallback: bool = typer.Option(
+        True,
+        "--render-fallback/--no-render-fallback",
+        help="解析失败时是否降级到LibreOffice渲染+多模态识别",
+    ),
+    libreoffice_path: Optional[str] = typer.Option(
+        None,
+        "--libreoffice-path",
+        help="LibreOffice 可执行文件路径（自动检测）",
     ),
     toc: bool = typer.Option(
         True,
@@ -64,17 +74,16 @@ def parse(
 
     示例:
         wordparser parse document.docx
-        wordparser parse document.docx -o output.md
+        wordparser parse document.doc -o output.md
         wordparser parse document.docx --no-toc --max-heading 3
         wordparser parse document.docx --vision-url http://localhost:1234/v1
     """
     try:
-        # 构建配置
         multimodal_config = None
         if vision_url:
             model_config = VisionModelConfig(
                 base_url=vision_url,
-                model=vision_model or "qwen2-vl-7b",
+                model=vision_model or "qwen3.5-9b",
             )
             multimodal_config = MultimodalConfig(
                 max_concurrent=max_concurrent,
@@ -85,28 +94,26 @@ def parse(
             generate_toc=toc,
             max_heading_level=max_heading,
             multimodal=multimodal_config,
+            enable_render_fallback=render_fallback,
+            libreoffice_path=libreoffice_path,
         )
 
-        # 创建解析器
         parser = WordParser(config)
 
-        # 解析文档
         if verbose:
             typer.echo(f"正在解析文档: {docx_file}")
 
         markdown, report = parser.parse_with_report(docx_file)
 
-        # 输出结果
         if output:
             output_path = Path(output)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_text(markdown, encoding="utf-8")
             if verbose:
-                typer.echo(f"✓ 已保存到: {output_path}")
+                typer.echo(f"已保存到: {output_path}")
         else:
             typer.echo(markdown)
 
-        # 显示统计信息
         if verbose:
             typer.echo("\n解析统计:")
             typer.echo(f"  标题数: {report.stats.total_headings}")
@@ -114,7 +121,6 @@ def parse(
             typer.echo(f"  表格数: {report.stats.total_tables}")
             typer.echo(f"  图片数: {report.stats.total_images}")
 
-        # 检查错误
         if report.has_errors():
             if verbose:
                 typer.echo("\n警告: 解析过程中发生错误", err=True)
