@@ -14,7 +14,7 @@ class VisionModelConfig:
     base_url: str = "http://localhost:1234/v1"
     api_key: str | None = None
     model: str = "qwen3.5-9b"
-    timeout: int = 60
+    timeout: int = 600
     temperature: float = 0.0
 
 
