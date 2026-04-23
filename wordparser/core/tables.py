@@ -111,3 +111,34 @@ class TableProcessor:
                         return True
 
         return False
+
+    def extract_table_data(self, table: Table) -> str:
+        """提取表格的完整单元格数据，用于 LLM 解析
+
+        Args:
+            table: docx Table 对象
+
+        Returns:
+            格式化的单元格数据文本
+        """
+        if not table:
+            return ""
+
+        lines = []
+        for row_idx, row in enumerate(table.rows):
+            cells = []
+            for cell in row.cells:
+                cell_text = cell.text.strip().replace("\n", " ")
+                merge_info = ""
+                tc_pr = cell._element.tcPr
+                if tc_pr is not None:
+                    grid_span = tc_pr.gridSpan
+                    if grid_span is not None and grid_span.val > 1:
+                        merge_info = f"[colspan={grid_span.val}]"
+                    v_merge = tc_pr.vMerge
+                    if v_merge is not None:
+                        merge_info += "[rowspan]"
+                cells.append(f"{cell_text}{merge_info}")
+            lines.append(f"行{row_idx}: {' | '.join(cells)}")
+
+        return "\n".join(lines)
