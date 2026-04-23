@@ -22,3 +22,12 @@ htmlcov/
 *~
 .DS_Store
 Thumbs.db
+
+# Test output files
+tests/fixtures/output*.md
+test_run.log
+*.log
+
+# Temporary office files
+~$*
+*.tmp
