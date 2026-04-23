@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 import logging
+import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
+
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
 
 from wordparser.config import ParserConfig
 from wordparser.core.chart_extractor import ChartExtractor
 from wordparser.core.formulas import FormulaProcessor
-from wordparser.core.models import ParsedDocument
+from wordparser.core.models import ParsedDocument, TitleNode
 from wordparser.core.postprocess import PostProcessor
 from wordparser.core.preprocessor import Preprocessor
 from wordparser.core.renderer import DocumentRenderer
@@ -16,11 +21,21 @@ from wordparser.core.report import ParseReport
 from wordparser.core.smartart_extractor import SmartArtExtractor
 from wordparser.core.structure import StructureParser
 from wordparser.core.tables import TableProcessor
-from wordparser.core.toc import TOCGenerator
+from wordparser.core.toc import TOCGenerator, Heading
 from wordparser.exceptions import DocumentError, WordParserError
 from wordparser.multimodal.parser import MultimodalParser
 
 logger = logging.getLogger(__name__)
+
+W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+R_URI = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+
+# 占位符格式：不会出现在正常文本中
+_PH_IMG = "[__WP_IMG_{}__]"
+_PH_CHART = "[__WP_CHART_{}__]"
+_PH_SA = "[__WP_SA_{}__]"
 
 
 class WordParser:
@@ -71,7 +86,6 @@ class WordParser:
         return markdown, report
 
     def _ensure_docx(self, input_path: Path) -> Path:
-        """确保输入为 .docx 格式，.doc 自动转换"""
         if self.renderer.is_doc(input_path):
             if not self.renderer.is_available():
                 raise DocumentError(
@@ -81,13 +95,16 @@ class WordParser:
             return self.renderer.convert_doc_to_docx(input_path)
         return input_path
 
+    # ================================================================
+    # 主解析流程
+    # ================================================================
+
     def _parse_document(self, docx_path: str | Path) -> ParsedDocument:
         docx_path = Path(docx_path)
 
         if not docx_path.exists():
             raise DocumentError(f"文件不存在: {docx_path}")
 
-        # .doc 自动转换
         docx_path = self._ensure_docx(docx_path)
 
         supported = {".docx", ".doc"}
@@ -95,79 +112,57 @@ class WordParser:
             raise DocumentError(f"不支持的文件格式: {docx_path.suffix}")
 
         try:
-            # 1. 加载并预处理
+            # 1. 加载文档
             from docx import Document as DocxDocument
             doc = DocxDocument(str(docx_path))
+
+            # 2. 预处理前：注入占位符（图片/Chart/SmartArt → 文本标记）
+            rich_ids = self._inject_placeholders(doc)
+
+            # 3. 预处理（占位符作为文本保留，不会被删除）
             doc = self.preprocessor.clean(doc)
 
-            # 2. 结构解析
+            # 4. 设置 doc_part 用于超链接解析
+            self.structure_parser.set_doc_part(doc.part)
+
+            # 5. 结构解析（占位符文本会被保留在 paragraph content 中）
             blocks = self.structure_parser.parse(doc)
             title_tree = self.structure_parser.get_title_tree()
 
-            # 3. 嵌入图片解析（零持久化，自动检测）
-            image_descriptions = self._parse_images(doc)
-
-            # 4. Chart 图表解析
-            chart_descriptions = self._parse_charts(docx_path)
-
-            # 5. SmartArt 解析
-            smartart_descriptions = self._parse_smartarts(docx_path)
-
-            # 6. 复杂表格解析
-            table_sections = self._parse_complex_tables(doc)
+            # 6. 并行解析富内容
+            image_descs, chart_descs, sa_descs = self._parse_rich_content(
+                doc, docx_path, rich_ids,
+            )
 
             # 7. 构建 Markdown
-            markdown_lines = []
-            for block in blocks:
-                if block.type.value == "heading":
-                    node = block.content
-                    markdown_lines.append(f"{'#' * node.level} {node.text}\n")
-                elif block.type.value == "paragraph":
-                    markdown_lines.append(f"{block.content}\n")
-                elif block.type.value == "list":
-                    markdown_lines.append(f"- {block.content}\n")
+            markdown = self._build_markdown(doc, blocks, title_tree)
 
-            # 图片描述
-            if image_descriptions:
-                markdown_lines.append("\n## 图片内容\n\n")
-                for i, desc in enumerate(image_descriptions):
-                    markdown_lines.append(f"### 图片 {i + 1}\n\n{desc}\n\n")
+            # 8. 回填占位符
+            markdown = self._resolve_placeholders(markdown, image_descs, chart_descs, sa_descs)
 
-            # 图表描述
-            if chart_descriptions:
-                markdown_lines.append("\n## 图表内容\n\n")
-                for desc in chart_descriptions:
-                    markdown_lines.append(f"{desc}\n\n")
-
-            # SmartArt 描述
-            if smartart_descriptions:
-                markdown_lines.append("\n## SmartArt 内容\n\n")
-                for desc in smartart_descriptions:
-                    markdown_lines.append(f"{desc}\n\n")
-
-            # 复杂表格
-            if table_sections:
-                markdown_lines.append("\n## 复杂表格\n\n")
-                for table_md in table_sections:
-                    markdown_lines.append(f"{table_md}\n\n")
-
-            markdown = "\n".join(markdown_lines)
-
-            # 8. 后处理
+            # 9. 后处理
             markdown = self.postprocessor.process(markdown)
+
+            # 10. TOC
+            if self.config.generate_toc and title_tree:
+                toc_md = self._generate_toc_markdown(title_tree)
+                markdown = f"## 目录\n\n{toc_md}\n\n---\n\n{markdown}"
+
+            # 11. 可选：页眉页脚
+            if self.config.include_header_footer:
+                hf_md = self._extract_header_footer(doc)
+                if hf_md:
+                    markdown += f"\n\n## 页眉页脚\n\n{hf_md}"
 
             document = ParsedDocument(
                 metadata={
                     "docx_path": str(docx_path),
                     "word_count": sum(len(p.text) for p in doc.paragraphs),
                     "paragraph_count": len(doc.paragraphs),
-                    "image_count": len(image_descriptions),
-                    "chart_count": len(chart_descriptions),
-                    "smartart_count": len(smartart_descriptions),
-                    "complex_table_count": len(table_sections),
-                    "image_descriptions": image_descriptions,
-                    "chart_descriptions": chart_descriptions,
-                    "smartart_descriptions": smartart_descriptions,
+                    "image_count": len(image_descs),
+                    "chart_count": len(chart_descs),
+                    "smartart_count": len(sa_descs),
+                    "complex_table_count": 0,
                     "markdown": markdown,
                 },
                 title_tree=title_tree,
@@ -181,16 +176,109 @@ class WordParser:
                 raise
             raise WordParserError(f"文档解析失败: {e}") from e
 
-    def _parse_images(self, doc) -> list[str]:
-        """解析嵌入图片（零持久化）"""
-        descriptions = []
+    # ================================================================
+    # 占位符注入（预处理前）
+    # ================================================================
 
-        has_images = any("image" in rel.target_ref for rel in doc.part.rels.values())
+    def _inject_placeholders(self, doc) -> dict:
+        """预处理前：在含图片/Chart/SmartArt 的段落中注入文本占位符。
 
-        if not has_images:
-            return descriptions
+        占位符作为普通文本 run 加入段落，确保预处理不会删除这些段落。
+        返回 {type: {id: rId_or_index}} 映射。
+        """
+        rich_ids = {"img": {}, "chart": {}, "sa": {}}
+        body = doc.element.body
+        chart_idx = 0
+        sa_idx = 0
 
-        # 延迟初始化 vision_client
+        for para_elem in body.iter(f"{{{W_NS}}}p"):
+            # 图片
+            for blip in para_elem.iter(f"{{{A_NS}}}blip"):
+                rId = blip.get(f"{{{R_URI}}}embed")
+                if rId:
+                    self._append_text_run(para_elem, _PH_IMG.format(rId))
+                    rich_ids["img"][rId] = rId
+
+            # Chart
+            for chart_ref in para_elem.iter(f"{{{W_NS}}}object"):
+                # Chart 通常在 w:object 中
+                pass
+            # 也检查 w:drawing 中的 chart
+            for elem in para_elem.iter():
+                local = elem.tag.split("}")[1] if "}" in elem.tag else elem.tag
+                if local == "chart":
+                    rId = elem.get(f"{{{R_URI}}}id")
+                    if rId:
+                        ph = _PH_CHART.format(chart_idx)
+                        self._append_text_run(para_elem, ph)
+                        rich_ids["chart"][chart_idx] = rId
+                        chart_idx += 1
+
+            # SmartArt (diagramData / dgm)
+            for elem in para_elem.iter():
+                local = elem.tag.split("}")[1] if "}" in elem.tag else elem.tag
+                if "dgm" in elem.tag.lower() or "diagram" in elem.tag.lower():
+                    ph = _PH_SA.format(sa_idx)
+                    self._append_text_run(para_elem, ph)
+                    rich_ids["sa"][sa_idx] = sa_idx
+                    sa_idx += 1
+                    break
+
+        return rich_ids
+
+    @staticmethod
+    def _append_text_run(para_elem, text: str) -> None:
+        """在段落末尾追加一个纯文本 run"""
+        run = OxmlElement("w:r")
+        t = OxmlElement("w:t")
+        t.text = text
+        t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        run.append(t)
+        para_elem.append(run)
+
+    # ================================================================
+    # 富内容并行解析
+    # ================================================================
+
+    def _parse_rich_content(self, doc, docx_path: Path, rich_ids: dict):
+        """并行解析图片、Chart、SmartArt"""
+        max_workers = self.config.multimodal.max_concurrent if self.config.multimodal else 2
+
+        image_descs = self._parse_images_parallel(doc, rich_ids.get("img", {}), max_workers)
+        chart_descs = self._parse_charts(docx_path)
+        sa_descs = self._parse_smartarts(docx_path)
+
+        return image_descs, chart_descs, sa_descs
+
+    def _parse_images_parallel(self, doc, img_ids: dict, max_workers: int) -> dict[str, str]:
+        """并行解析嵌入图片"""
+        if not img_ids:
+            return {}
+
+        self._ensure_vision_client()
+
+        from wordparser.multimodal.prompts import IMAGE_PROMPT
+
+        def _parse_one(rId):
+            try:
+                rel = doc.part.rels[rId]
+                image_bytes = rel.target_part.blob
+                desc = self.vision_client.parse_from_bytes(image_bytes, IMAGE_PROMPT)
+                return rId, desc
+            except Exception as e:
+                return rId, f"[图片解析失败: {e}]"
+
+        image_map: dict[str, str] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(_parse_one, rId): rId for rId in img_ids}
+            for future in as_completed(futures):
+                rId, desc = future.result()
+                image_map[rId] = desc
+
+        return image_map
+
+    def _ensure_vision_client(self) -> None:
+        """延迟初始化 vision_client"""
         if not self.vision_client:
             from wordparser.multimodal.client import OpenAICompatibleVisionClient
             self.vision_client = OpenAICompatibleVisionClient(
@@ -200,85 +288,193 @@ class WordParser:
             )
             self.multimodal_parser.vision_client = self.vision_client
 
-        from wordparser.multimodal.prompts import IMAGE_PROMPT
-
-        for rel in doc.part.rels.values():
-            if "image" in rel.target_ref:
-                try:
-                    image_bytes = rel.target_part.blob
-                    description = self.vision_client.parse_from_bytes(image_bytes, IMAGE_PROMPT)
-                    descriptions.append(description)
-                except Exception as e:
-                    descriptions.append(f"[图片解析失败: {e}]")
-
-        return descriptions
-
-    def _parse_charts(self, docx_path: Path) -> list[str]:
-        """解析 Chart 图表"""
+    def _parse_charts(self, docx_path: Path) -> dict[int, str]:
+        """解析 Chart 图表，返回 {index: description}"""
         if not self.vision_client:
-            return []
+            return {}
 
         try:
             chart_data_list = self.chart_extractor.extract(docx_path)
         except Exception as e:
             logger.warning(f"Chart 提取失败: {e}")
-            return []
+            return {}
 
-        descriptions = []
-        for chart_data in chart_data_list:
-            result = self.multimodal_parser.parse_chart_with_data(chart_data, docx_path)
-            descriptions.append(result.content)
+        result: dict[int, str] = {}
+        for i, chart_data in enumerate(chart_data_list):
+            try:
+                r = self.multimodal_parser.parse_chart_with_data(chart_data, docx_path)
+                result[i] = r.content
+            except Exception as e:
+                result[i] = f"[图表解析失败: {e}]"
+        return result
 
-        return descriptions
-
-    def _parse_smartarts(self, docx_path: Path) -> list[str]:
-        """解析 SmartArt"""
+    def _parse_smartarts(self, docx_path: Path) -> dict[int, str]:
+        """解析 SmartArt，返回 {index: description}"""
         if not self.vision_client:
-            return []
+            return {}
 
         try:
-            smartart_data_list = self.smartart_extractor.extract(docx_path)
+            sa_data_list = self.smartart_extractor.extract(docx_path)
         except Exception as e:
             logger.warning(f"SmartArt 提取失败: {e}")
-            return []
+            return {}
 
-        descriptions = []
-        for sa_data in smartart_data_list:
-            result = self.multimodal_parser.parse_smartart_with_data(sa_data, docx_path)
-            descriptions.append(result.content)
+        result: dict[int, str] = {}
+        for i, sa_data in enumerate(sa_data_list):
+            try:
+                r = self.multimodal_parser.parse_smartart_with_data(sa_data, docx_path)
+                result[i] = r.content
+            except Exception as e:
+                result[i] = f"[SmartArt解析失败: {e}]"
+        return result
 
-        return descriptions
+    # ================================================================
+    # Markdown 构建
+    # ================================================================
 
-    def _parse_complex_tables(self, doc) -> list[str]:
-        """检测并解析复杂表格"""
-        if not self.vision_client:
-            return []
+    def _build_markdown(self, doc, blocks: list, title_tree: list[TitleNode]) -> str:
+        """构建 Markdown，保持 w:p / w:tbl 文档流顺序。"""
+        from wordparser.core.models import BlockType
 
-        results = []
-        for table in doc.tables:
-            if self.table_processor.is_complex(table):
+        para_block_map: dict = {}
+        for block in blocks:
+            pe = block.metadata.get("_para_element")
+            if pe is not None:
+                para_block_map[id(pe)] = block
+
+        body = doc.element.body
+        markdown_lines: list[str] = []
+        emitted_blocks: set[int] = set()
+
+        for child in body:
+            tag = child.tag
+
+            if tag == f"{{{W_NS}}}p":
+                child_id = id(child)
+                block = para_block_map.get(child_id)
+                if block is not None:
+                    self._append_block_markdown(block, markdown_lines)
+                    emitted_blocks.add(id(block))
+
+            elif tag == f"{{{W_NS}}}tbl":
+                self._append_table_markdown(doc, child, markdown_lines)
+
+        for block in blocks:
+            if id(block) not in emitted_blocks:
+                self._append_block_markdown(block, markdown_lines)
+
+        return "\n".join(markdown_lines)
+
+    def _resolve_placeholders(
+        self,
+        markdown: str,
+        image_descs: dict[str, str],
+        chart_descs: dict[int, str],
+        sa_descs: dict[int, str],
+    ) -> str:
+        """将占位符替换为实际的富内容描述"""
+        # 图片
+        for rId, desc in image_descs.items():
+            ph = _PH_IMG.format(rId)
+            if ph in markdown:
+                markdown = markdown.replace(ph, f"\n> **[图片描述]** {desc}")
+
+        # Chart
+        for idx, desc in chart_descs.items():
+            ph = _PH_CHART.format(idx)
+            if ph in markdown:
+                markdown = markdown.replace(ph, f"\n> **[图表描述]** {desc}")
+
+        # SmartArt
+        for idx, desc in sa_descs.items():
+            ph = _PH_SA.format(idx)
+            if ph in markdown:
+                markdown = markdown.replace(ph, f"\n> **[SmartArt描述]** {desc}")
+
+        return markdown
+
+    def _append_block_markdown(self, block, lines: list[str]) -> None:
+        from wordparser.core.models import BlockType
+
+        if block.type == BlockType.HEADING:
+            node = block.content
+            lines.append(f"{'#' * node.level} {node.text}\n")
+        elif block.type == BlockType.PARAGRAPH:
+            lines.append(f"{block.content}\n")
+        elif block.type == BlockType.LIST:
+            level = block.metadata.get("level", 0)
+            indent = "  " * level
+            lines.append(f"{indent}- {block.content}\n")
+
+    def _append_table_markdown(self, doc, tbl_element, lines: list[str]) -> None:
+        table = None
+        for t in doc.tables:
+            if t._element is tbl_element:
+                table = t
+                break
+
+        if table is None:
+            return
+
+        if self.table_processor.is_complex(table):
+            if self.vision_client:
                 table_data = self.table_processor.extract_table_data(table)
                 result = self.multimodal_parser.parse_complex_table(table_data)
-                results.append(result.content)
+                lines.append(f"\n{result.content}\n")
+            else:
+                md = self._simple_table_to_md(table)
+                lines.append(f"\n{md}\n")
+        else:
+            md = self._simple_table_to_md(table)
+            lines.append(f"\n{md}\n")
 
-        return results
+    def _simple_table_to_md(self, table) -> str:
+        if not table or not table.rows:
+            return ""
+
+        lines = []
+        for row_idx, row in enumerate(table.rows):
+            cells = [cell.text.strip().replace("\n", " ") for cell in row.cells]
+            lines.append(f"| {' | '.join(cells)} |")
+            if row_idx == 0:
+                col_count = len(row.cells)
+                lines.append(f"| {' | '.join(['---'] * col_count)} |")
+
+        return "\n".join(lines)
+
+    # ================================================================
+    # TOC / Report / Header-Footer
+    # ================================================================
+
+    def _generate_toc_markdown(self, title_tree: list[TitleNode]) -> str:
+        headings = []
+        self._collect_headings(title_tree, headings)
+        if not headings:
+            return ""
+        return self.toc_generator.generate(headings, add_anchors=True)
+
+    def _collect_headings(self, nodes: list[TitleNode], headings: list[Heading], prefix: str = "") -> None:
+        counters: dict[int, int] = {}
+        for node in nodes:
+            level = node.level
+            counters[level] = counters.get(level, 0) + 1
+            for k in list(counters.keys()):
+                if k > level:
+                    del counters[k]
+            parts = [str(counters[l]) for l in sorted(counters.keys())]
+            number = ".".join(parts)
+            headings.append(Heading(level=node.level, text=node.text, number=number))
+            self._collect_headings(node.children, headings, number)
 
     def _generate_report(self, document: ParsedDocument) -> ParseReport:
         from wordparser.core.report import ParseStats
-
         metadata = document.metadata
 
         def count_titles(nodes):
-            count = 0
-            for node in nodes:
-                count += 1
-                count += count_titles(node.children)
-            return count
-
-        heading_count = count_titles(document.title_tree)
+            return sum(1 + count_titles(n.children) for n in nodes)
 
         stats = ParseStats(
-            total_headings=heading_count,
+            total_headings=count_titles(document.title_tree),
             total_paragraphs=metadata.get("paragraph_count", 0),
             total_tables=metadata.get("complex_table_count", 0),
             total_images=metadata.get("image_count", 0),
@@ -286,10 +482,21 @@ class WordParser:
             multimodal_failures=0,
             processing_time=0.0,
         )
+        return ParseReport(success=True, output_path=None, errors=[], stats=stats)
 
-        return ParseReport(
-            success=True,
-            output_path=None,
-            errors=[],
-            stats=stats,
-        )
+    def _extract_header_footer(self, doc) -> str:
+        parts = []
+        for section in doc.sections:
+            header = section.header
+            if header and not header.is_linked_to_previous:
+                for p in header.paragraphs:
+                    t = p.text.strip()
+                    if t:
+                        parts.append(f"**页眉**: {t}")
+            footer = section.footer
+            if footer and not footer.is_linked_to_previous:
+                for p in footer.paragraphs:
+                    t = p.text.strip()
+                    if t:
+                        parts.append(f"**页脚**: {t}")
+        return "\n".join(parts)

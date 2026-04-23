@@ -16,8 +16,15 @@ class Preprocessor:
         return doc
 
     def _remove_blank_paragraphs(self, doc: Document) -> None:
+        A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+        M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
         for para in list(doc.paragraphs):
             if not para.text.strip():
+                # 跳过含图片、公式等富内容的段落
+                if para._element.find(f".//{{{A_NS}}}blip") is not None:
+                    continue
+                if para._element.find(f".//{{{M_NS}}}oMath") is not None:
+                    continue
                 parent = para._element.getparent()
                 if parent is not None:
                     parent.remove(para._element)

@@ -19,7 +19,7 @@ class PostProcessor:
 
     def _trim_lines(self, text: str) -> str:
         lines = text.split("\n")
-        return "\n".join(line.strip() for line in lines)
+        return "\n".join(line.rstrip() for line in lines)
 
     def _ensure_heading_spacing(self, text: str) -> str:
         text = re.sub(r"([^\n])\n(#{1,6}\s)", r"\1\n\n\2", text)

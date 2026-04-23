@@ -37,3 +37,4 @@ class ParserConfig:
     toc_position: TOCPosition = TOCPosition.AFTER_TITLE
     include_header_footer: bool = False
     include_comments: bool = False
+    include_footnotes: bool = False
