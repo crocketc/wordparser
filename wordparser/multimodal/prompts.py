@@ -121,3 +121,43 @@ def get_smartart_prompt(custom_instructions: str = "") -> str:
     if custom_instructions:
         return SMARTART_PROMPT + "\n\n额外要求：\n" + custom_instructions
     return SMARTART_PROMPT
+
+
+# Chart 结构化数据 LLM 提示词（XML 提取模式）
+CHART_DATA_PROMPT = """你是一个专业的数据分析师。以下是从一个图表中提取的结构化数据，请将其转换为清晰的 Markdown 格式。
+
+要求：
+1. 输出图表标题（如有）
+2. 用 Markdown 表格展示数据
+3. 简要描述图表中的关键趋势或发现
+
+图表数据：
+{chart_data}
+
+请直接输出 Markdown 格式结果。"""
+
+# SmartArt 结构化数据 LLM 提示词（XML 提取模式）
+SMARTART_DATA_PROMPT = """你是一个专业的内容整理专家。以下是从一个 SmartArt 图形中提取的结构化数据，请将其转换为清晰的 Markdown 格式。
+
+要求：
+1. 用 Markdown 列表展示节点层级关系
+2. 保留原始的层级缩进
+3. 如有流程逻辑，用箭头或编号标注步骤顺序
+
+SmartArt 数据：
+{smartart_data}
+
+请直接输出 Markdown 格式结果。"""
+
+# 复杂表格 LLM 提示词
+COMPLEX_TABLE_PROMPT = """你是一个专业的表格数据整理专家。以下是一个复杂 Word 表格的单元格数据，请将其重建为正确的 Markdown 表格。
+
+要求：
+1. 准确识别表头行
+2. 处理合并单元格（用 colspan/rowspan 标注或拆分为多个单元格）
+3. 保持数据的对齐关系
+
+单元格数据：
+{table_data}
+
+请直接输出 Markdown 表格。"""

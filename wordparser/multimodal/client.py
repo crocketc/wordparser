@@ -150,3 +150,33 @@ class OpenAICompatibleVisionClient:
             max_tokens=max_tokens,
             temperature=temperature,
         )
+
+    def parse_text(
+        self,
+        prompt: str,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> str:
+        """纯文本对话，用于 LLM 解析结构化数据
+
+        Args:
+            prompt: 完整的提示词（包含数据）
+            max_tokens: 覆盖默认的最大 token 数
+            temperature: 覆盖默认的温度参数
+
+        Returns:
+            模型的回复文本
+        """
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            max_tokens=max_tokens or self.max_tokens,
+            temperature=temperature if temperature is not None else self.temperature,
+        )
+
+        return response.choices[0].message.content
