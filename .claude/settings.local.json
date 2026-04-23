@@ -61,7 +61,15 @@
       "Bash(python -c \"import wordparser; print\\('wordparser已安装'\\)\")",
       "Bash(rm -f cli_test.docx cli_output.md)",
       "Bash(ls *.docx *.md)",
-      "Bash(python -m wordparser_cli.main parse \"交互测试.docx\" -o \"交互测试输出.md\" -v)"
+      "Bash(python -m wordparser_cli.main parse \"交互测试.docx\" -o \"交互测试输出.md\" -v)",
+      "Bash(git commit *)",
+      "Bash(python *)",
+      "Bash(git restore *)",
+      "Bash(grep -E \"^images$|^test_output\")",
+      "Bash(git reset *)",
+      "WebSearch",
+      "Bash(grep -n '\\\\$' tests/fixtures/output.md)",
+      "Bash(tee test_run.log)"
     ]
   }
 }
