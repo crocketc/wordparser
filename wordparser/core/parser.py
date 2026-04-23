@@ -118,9 +118,24 @@ class WordParser:
             blocks = self.structure_parser.parse(doc)
             title_tree = self.structure_parser.get_title_tree()
 
-            # 3. 提取图片并解析（零持久化）
+            # 3. 自动检测图片并解析（零持久化）
             image_descriptions = []
-            if self.vision_client:
+
+            # 3.1 检测文档中是否有图片
+            has_images = any("image" in rel.target_ref for rel in doc.part.rels.values())
+
+            # 3.2 如果有图片，确保 vision_client 已初始化
+            if has_images and not self.vision_client:
+                # 延迟初始化 vision_client（使用默认配置）
+                from wordparser.multimodal.client import OpenAICompatibleVisionClient
+                self.vision_client = OpenAICompatibleVisionClient(
+                    base_url="http://localhost:1234/v1",
+                    model="qwen3.5-9b",
+                    temperature=0.0,
+                )
+
+            # 3.3 解析图片
+            if has_images and self.vision_client:
                 from wordparser.multimodal.prompts import IMAGE_PROMPT
 
                 for rel in doc.part.rels.values():
