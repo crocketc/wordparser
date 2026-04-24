@@ -16,7 +16,7 @@
 | Chart 图表 | XML 数据提取 + LLM 语义理解 + 渲染降级 | 已实现 |
 | SmartArt | XML 数据提取 + LLM 语义理解 + 渲染降级 | 已实现 |
 | .doc 格式 | 自动检测并调用 LibreOffice 转换为 .docx | 已实现 |
-| 公式处理 | OMML→LaTeX 转换 | 待实现 |
+| 公式处理 | OMML→LaTeX 转换 | 已实现 |
 | 目录生成 | 自动生成带锚点的 MD 目录 | 已实现 |
 | 后处理 | 格式规范化、换行统一 | 已实现 |
 
@@ -118,7 +118,8 @@ Document_Parsing/
 ├── tests/                           # 测试
 │   ├── test_chart_extractor.py
 │   ├── test_smartart_extractor.py
-│   └── test_renderer.py
+│   ├── test_renderer.py
+│   └── test_formula_processor.py
 ├── wordparser.bat                   # 用户入口（GBK 编码）
 ├── docs/                            # 文档
 ├── pyproject.toml
@@ -250,8 +251,7 @@ wordparser.bat parse document.docx --libreoffice-path "C:\Program Files\LibreOff
 
 ## 待实现功能
 
-1. **公式处理**：OMML → LaTeX 转换的完整实现
-2. **高级特性**：脚注处理、批注处理、页眉页脚处理
+1. **高级特性**：脚注处理、批注处理、页眉页脚处理
 
 ---
 
@@ -288,17 +288,22 @@ rich>=13.0           # 终端输出美化
 
 ### 本地 LM Studio 配置
 
-默认配置使用本地 LM Studio API，全模态模型 qwen3.5-9b：
+默认配置使用本地 LM Studio API，全模态模型 qwen3.5-9b。
+
+所有配置项默认值定义在 `wordparser/config.py`，CLI 自动同步这些默认值。
 
 ```python
 from wordparser.config import VisionModelConfig, MultimodalConfig, ParserConfig
 
+# 使用默认配置（见 config.py）
+config = ParserConfig()
+
+# 或覆盖部分配置
 config = ParserConfig(
     multimodal=MultimodalConfig(
-        max_concurrent=4,
+        max_concurrent=6,  # 覆盖默认值
         model=VisionModelConfig(
             base_url="http://localhost:1234/v1",
-            # model="qwen3.5-9b",  # 默认值，可省略
         ),
     ),
 )
@@ -332,6 +337,7 @@ pytest tests/test_renderer.py -v
 | `test_chart_extractor.py` | 5 | Chart XML 解析、类型检测、格式化 |
 | `test_smartart_extractor.py` | 3 | SmartArt 节点树构建、空数据处理 |
 | `test_renderer.py` | 3 | LibreOffice 检测、.doc 识别 |
+| `test_formula_processor.py` | 16 | OMML → LaTeX 转换、公式格式化 |
 
 ---
 
@@ -386,4 +392,4 @@ A: 使用 CLI 的 `-v` 参数查看详细输出和统计信息。
 
 ---
 
-*最后更新: 2026-04-23*
+*最后更新: 2026-04-24*
