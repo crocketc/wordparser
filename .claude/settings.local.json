@@ -69,7 +69,11 @@
       "Bash(git reset *)",
       "WebSearch",
       "Bash(grep -n '\\\\$' tests/fixtures/output.md)",
-      "Bash(tee test_run.log)"
+      "Bash(tee test_run.log)",
+      "Bash(curl -s http://localhost:1234/v1/models)",
+      "Bash(pytest tests/test_formula_processor.py -v --tb=short)",
+      "Bash(pytest tests/test_formula_processor.py -v --tb=line)",
+      "Bash(pytest tests/ -v --tb=line)"
     ]
   }
 }

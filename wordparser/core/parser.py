@@ -36,6 +36,7 @@ R_URI = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _PH_IMG = "[__WP_IMG_{}__]"
 _PH_CHART = "[__WP_CHART_{}__]"
 _PH_SA = "[__WP_SA_{}__]"
+_PH_TABLE = "[__WP_TABLE_{}__]"
 
 
 class WordParser:
@@ -130,7 +131,7 @@ class WordParser:
             title_tree = self.structure_parser.get_title_tree()
 
             # 6. 并行解析富内容
-            image_descs, chart_descs, sa_descs = self._parse_rich_content(
+            image_descs, chart_descs, sa_descs, table_descs = self._parse_rich_content(
                 doc, docx_path, rich_ids,
             )
 
@@ -138,7 +139,7 @@ class WordParser:
             markdown = self._build_markdown(doc, blocks, title_tree)
 
             # 8. 回填占位符
-            markdown = self._resolve_placeholders(markdown, image_descs, chart_descs, sa_descs)
+            markdown = self._resolve_placeholders(markdown, image_descs, chart_descs, sa_descs, table_descs)
 
             # 9. 后处理
             markdown = self.postprocessor.process(markdown)
@@ -186,10 +187,14 @@ class WordParser:
         占位符作为普通文本 run 加入段落，确保预处理不会删除这些段落。
         返回 {type: {id: rId_or_index}} 映射。
         """
-        rich_ids = {"img": {}, "chart": {}, "sa": {}}
+        rich_ids = {"img": {}, "chart": {}, "sa": {}, "table": {}}
         body = doc.element.body
         chart_idx = 0
         sa_idx = 0
+        table_idx = 0
+
+        # 收集复杂表格（用于后续并行解析）
+        # 不在这里插入占位符，而是在 _build_markdown 时处理
 
         for para_elem in body.iter(f"{{{W_NS}}}p"):
             # 图片
@@ -241,14 +246,15 @@ class WordParser:
     # ================================================================
 
     def _parse_rich_content(self, doc, docx_path: Path, rich_ids: dict):
-        """并行解析图片、Chart、SmartArt"""
+        """并行解析图片、Chart、SmartArt、复杂表格"""
         max_workers = self.config.multimodal.max_concurrent if self.config.multimodal else 2
 
         image_descs = self._parse_images_parallel(doc, rich_ids.get("img", {}), max_workers)
         chart_descs = self._parse_charts(docx_path)
         sa_descs = self._parse_smartarts(docx_path)
+        table_descs = self._parse_complex_tables_parallel(doc, rich_ids.get("table", {}), max_workers)
 
-        return image_descs, chart_descs, sa_descs
+        return image_descs, chart_descs, sa_descs, table_descs
 
     def _parse_images_parallel(self, doc, img_ids: dict, max_workers: int) -> dict[str, str]:
         """并行解析嵌入图片"""
@@ -277,19 +283,72 @@ class WordParser:
 
         return image_map
 
+    def _parse_complex_tables_parallel(self, doc, table_ids: dict, max_workers: int) -> dict[int, str]:
+        """并行解析复杂表格，返回 {table_element_id: description}"""
+        if not table_ids:
+            return {}
+
+        self._ensure_vision_client()
+
+        # 收集所有复杂表格
+        complex_tables = []
+        body = doc.element.body
+        for tbl_elem in body.iter(f"{{{W_NS}}}tbl"):
+            table = None
+            for t in doc.tables:
+                if t._element is tbl_elem:
+                    table = t
+                    break
+            if table and self.table_processor.is_complex(table):
+                complex_tables.append((tbl_elem, table))
+
+        if not complex_tables:
+            return {}
+
+        def _parse_one(tbl_elem, table):
+            try:
+                table_data = self.table_processor.extract_table_data(table)
+                result = self.multimodal_parser.parse_complex_table(table_data)
+                return tbl_elem, result.content
+            except Exception as e:
+                return tbl_elem, f"[复杂表格解析失败: {e}]"
+
+        table_map: dict[int, str] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(_parse_one, tbl_elem, table): tbl_elem for tbl_elem, table in complex_tables}
+            for future in as_completed(futures):
+                tbl_elem, desc = future.result()
+                table_map[id(tbl_elem)] = desc
+
+        return table_map
+
     def _ensure_vision_client(self) -> None:
-        """延迟初始化 vision_client"""
+        """延迟初始化 vision_client，从配置读取参数"""
         if not self.vision_client:
             from wordparser.multimodal.client import OpenAICompatibleVisionClient
+            # 从配置读取模型参数，默认使用 config.py 中的默认值
+            model_config = self.config.multimodal.model if self.config.multimodal else None
             self.vision_client = OpenAICompatibleVisionClient(
-                base_url="http://localhost:1234/v1",
-                model="qwen3.5-9b",
-                temperature=0.0,
+                base_url=model_config.base_url if model_config else "http://localhost:1234/v1",
+                model=model_config.model if model_config else "qwen3.5-4b",
+                temperature=model_config.temperature if model_config else 0.0,
             )
             self.multimodal_parser.vision_client = self.vision_client
 
+    def _wrap_multimodal_result(self, content: str, content_type: str) -> str:
+        """将多模态解析结果用代码框包裹
+
+        Args:
+            content: AI 解析返回的内容
+            content_type: 内容类型（image/chart/smartart/table）
+
+        Returns:
+            包裹后的 Markdown 字符串
+        """
+        return f"\n```{content_type}\n{content}\n```\n"
+
     def _parse_charts(self, docx_path: Path) -> dict[int, str]:
-        """解析 Chart 图表，返回 {index: description}"""
+        """并行解析 Chart 图表，返回 {index: description}"""
         if not self.vision_client:
             return {}
 
@@ -299,17 +358,28 @@ class WordParser:
             logger.warning(f"Chart 提取失败: {e}")
             return {}
 
-        result: dict[int, str] = {}
-        for i, chart_data in enumerate(chart_data_list):
+        if not chart_data_list:
+            return {}
+
+        max_workers = self.config.multimodal.max_concurrent if self.config.multimodal else 2
+
+        def _parse_one(index: int, chart_data):
             try:
                 r = self.multimodal_parser.parse_chart_with_data(chart_data, docx_path)
-                result[i] = r.content
+                return index, r.content
             except Exception as e:
-                result[i] = f"[图表解析失败: {e}]"
+                return index, f"[图表解析失败: {e}]"
+
+        result: dict[int, str] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(_parse_one, i, chart_data): i for i, chart_data in enumerate(chart_data_list)}
+            for future in as_completed(futures):
+                index, desc = future.result()
+                result[index] = desc
         return result
 
     def _parse_smartarts(self, docx_path: Path) -> dict[int, str]:
-        """解析 SmartArt，返回 {index: description}"""
+        """并行解析 SmartArt，返回 {index: description}"""
         if not self.vision_client:
             return {}
 
@@ -319,13 +389,24 @@ class WordParser:
             logger.warning(f"SmartArt 提取失败: {e}")
             return {}
 
-        result: dict[int, str] = {}
-        for i, sa_data in enumerate(sa_data_list):
+        if not sa_data_list:
+            return {}
+
+        max_workers = self.config.multimodal.max_concurrent if self.config.multimodal else 2
+
+        def _parse_one(index: int, sa_data):
             try:
                 r = self.multimodal_parser.parse_smartart_with_data(sa_data, docx_path)
-                result[i] = r.content
+                return index, r.content
             except Exception as e:
-                result[i] = f"[SmartArt解析失败: {e}]"
+                return index, f"[SmartArt解析失败: {e}]"
+
+        result: dict[int, str] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(_parse_one, i, sa_data): i for i, sa_data in enumerate(sa_data_list)}
+            for future in as_completed(futures):
+                index, desc = future.result()
+                result[index] = desc
         return result
 
     # ================================================================
@@ -371,25 +452,33 @@ class WordParser:
         image_descs: dict[str, str],
         chart_descs: dict[int, str],
         sa_descs: dict[int, str],
+        table_descs: dict[int, str] = None,
     ) -> str:
         """将占位符替换为实际的富内容描述"""
         # 图片
         for rId, desc in image_descs.items():
             ph = _PH_IMG.format(rId)
             if ph in markdown:
-                markdown = markdown.replace(ph, f"\n> **[图片描述]** {desc}")
+                markdown = markdown.replace(ph, self._wrap_multimodal_result(desc, "image"))
 
         # Chart
         for idx, desc in chart_descs.items():
             ph = _PH_CHART.format(idx)
             if ph in markdown:
-                markdown = markdown.replace(ph, f"\n> **[图表描述]** {desc}")
+                markdown = markdown.replace(ph, self._wrap_multimodal_result(desc, "chart"))
 
         # SmartArt
         for idx, desc in sa_descs.items():
             ph = _PH_SA.format(idx)
             if ph in markdown:
-                markdown = markdown.replace(ph, f"\n> **[SmartArt描述]** {desc}")
+                markdown = markdown.replace(ph, self._wrap_multimodal_result(desc, "smartart"))
+
+        # 复杂表格
+        if table_descs:
+            for tbl_elem_id, desc in table_descs.items():
+                ph = _PH_TABLE.format(tbl_elem_id)
+                if ph in markdown:
+                    markdown = markdown.replace(ph, self._wrap_multimodal_result(desc, "table"))
 
         return markdown
 
@@ -417,13 +506,9 @@ class WordParser:
             return
 
         if self.table_processor.is_complex(table):
-            if self.vision_client:
-                table_data = self.table_processor.extract_table_data(table)
-                result = self.multimodal_parser.parse_complex_table(table_data)
-                lines.append(f"\n{result.content}\n")
-            else:
-                md = self._simple_table_to_md(table)
-                lines.append(f"\n{md}\n")
+            # 注入占位符，在 _resolve_placeholders 中替换
+            tbl_elem_id = id(tbl_element)
+            lines.append(_PH_TABLE.format(tbl_elem_id))
         else:
             md = self._simple_table_to_md(table)
             lines.append(f"\n{md}\n")

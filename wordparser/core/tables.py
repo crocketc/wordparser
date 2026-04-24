@@ -19,8 +19,8 @@ class TableProcessor:
         COMPLEX_COL_THRESHOLD: 判定为复杂表格的列数阈值
     """
 
-    COMPLEX_ROW_THRESHOLD = 10
-    COMPLEX_COL_THRESHOLD = 8
+    COMPLEX_ROW_THRESHOLD = 20
+    COMPLEX_COL_THRESHOLD = 15
 
     def __init__(self):
         """初始化表格处理器"""
@@ -68,9 +68,8 @@ class TableProcessor:
 
         复杂表格的判定标准：
         1. 包含嵌套表格
-        2. 行数超过阈值
-        3. 列数超过阈值
-        4. 包含合并单元格（跨行或跨列）
+        2. 包含合并单元格（跨行或跨列）
+        3. 行数超过阈值 AND 列数超过阈值（大表格）
 
         Args:
             table: docx Table对象
@@ -81,12 +80,8 @@ class TableProcessor:
         if not table:
             return False
 
-        # 检查行数
-        if len(table.rows) > self.COMPLEX_ROW_THRESHOLD:
-            return True
-
-        # 检查列数
-        if len(table.columns) > self.COMPLEX_COL_THRESHOLD:
+        # 检查行数和列数（大表格判定需要同时满足）
+        if len(table.rows) > self.COMPLEX_ROW_THRESHOLD and len(table.columns) > self.COMPLEX_COL_THRESHOLD:
             return True
 
         # 检查嵌套表格

@@ -1,4 +1,7 @@
-"""WordParser CLI工具"""
+"""WordParser CLI工具
+
+所有默认值动态从 config.py 读取，实现单一配置源（Single Source of Truth）
+"""
 
 from pathlib import Path
 from typing import Optional
@@ -12,6 +15,10 @@ app = typer.Typer(
     help="Word文档转Markdown解析工具",
     add_completion=False,
 )
+
+# 从 config.py 动态读取默认值（单一配置源）
+_DEFAULT_MULTIMODAL = MultimodalConfig()
+_DEFAULT_PARSER = ParserConfig()
 
 
 @app.command()
@@ -37,14 +44,14 @@ def parse(
         help="视觉模型名称",
     ),
     max_concurrent: int = typer.Option(
-        4,
+        _DEFAULT_MULTIMODAL.max_concurrent,
         "--max-concurrent",
-        help="最大并发请求数",
+        help=f"最大并发请求数（默认: {_DEFAULT_MULTIMODAL.max_concurrent}，见 wordparser.config.MultimodalConfig）",
     ),
     render_fallback: bool = typer.Option(
-        True,
+        _DEFAULT_PARSER.enable_render_fallback,
         "--render-fallback/--no-render-fallback",
-        help="解析失败时是否降级到LibreOffice渲染+多模态识别",
+        help=f"解析失败时是否降级到LibreOffice渲染+多模态识别（默认: {_DEFAULT_PARSER.enable_render_fallback}）",
     ),
     libreoffice_path: Optional[str] = typer.Option(
         None,
@@ -52,14 +59,14 @@ def parse(
         help="LibreOffice 可执行文件路径（自动检测）",
     ),
     toc: bool = typer.Option(
-        True,
+        _DEFAULT_PARSER.generate_toc,
         "--toc/--no-toc",
-        help="是否生成目录",
+        help=f"是否生成目录（默认: {_DEFAULT_PARSER.generate_toc}）",
     ),
     max_heading: int = typer.Option(
-        6,
+        _DEFAULT_PARSER.max_heading_level,
         "--max-heading",
-        help="最大标题级别（1-6）",
+        help="最大标题级别（1-6）（默认: 见 wordparser.config.ParserConfig）",
         min=1,
         max=6,
     ),
@@ -72,6 +79,8 @@ def parse(
     """
     解析Word文档为Markdown格式
 
+    所有配置项的默认值见 wordparser.config 模块。
+
     示例:
         wordparser parse document.docx
         wordparser parse document.doc -o output.md
@@ -79,16 +88,15 @@ def parse(
         wordparser parse document.docx --vision-url http://localhost:1234/v1
     """
     try:
-        multimodal_config = None
-        if vision_url:
-            model_config = VisionModelConfig(
-                base_url=vision_url,
-                model=vision_model or "qwen3.5-9b",
-            )
-            multimodal_config = MultimodalConfig(
-                max_concurrent=max_concurrent,
-                model=model_config,
-            )
+        # 始终创建 MultimodalConfig，使用默认值或用户指定的值
+        model_config = VisionModelConfig(
+            base_url=vision_url or _DEFAULT_MULTIMODAL.model.base_url,
+            model=vision_model or _DEFAULT_MULTIMODAL.model.model,
+        )
+        multimodal_config = MultimodalConfig(
+            max_concurrent=max_concurrent,
+            model=model_config,
+        )
 
         config = ParserConfig(
             generate_toc=toc,
@@ -124,8 +132,8 @@ def parse(
         if report.has_errors():
             if verbose:
                 typer.echo("\n警告: 解析过程中发生错误", err=True)
-                for error in report.errors:
-                    typer.echo(f"  - {error.type}: {error.message}", err=True)
+            for error in report.errors:
+                typer.echo(f"  - {error.type}: {error.message}", err=True)
             raise typer.Exit(code=1)
 
     except Exception as e:
