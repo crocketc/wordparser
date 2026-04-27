@@ -1,4 +1,26 @@
-"""并行多模态处理器"""
+"""并行多模态处理器
+
+⚠️ 技术债务: 该类当前未被实际使用
+
+现状:
+    parser.py 直接使用 ThreadPoolExecutor 实现并行处理，
+    未通过此类进行统一封装。
+
+原因分析:
+    1. 各类内容（图片/表格/Chart/SmartArt）处理逻辑差异较大
+    2. 统一接口反而增加抽象层复杂度
+    3. 直接使用 ThreadPoolExecutor 代码更简洁
+
+决策点:
+    待评估未来是否需要统一并行处理接口。
+    如果未来需要在多个模块复用并行逻辑，可考虑集成此类。
+    否则建议删除以降低维护成本。
+
+跟踪:
+    记录日期: 2026-04-27
+    文档: docs/lessons-learned.md (技术债务章节)
+"""
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Callable, Optional
 from wordparser.multimodal.parser import MultimodalParser, MultimodalResult
@@ -36,7 +58,9 @@ class ParallelMultimodalProcessor:
         self,
         items: List[Dict[str, Any]]
     ) -> List[MultimodalResult]:
-        """批量处理多模态内容
+        """批量处理多模态内容（滑动窗口模式）
+
+        优化策略：批量提交 + 动态补充，避免一次性创建大量Future对象
 
         Args:
             items: 待处理的项目列表，每个项目是包含type和data的字典
@@ -44,22 +68,41 @@ class ParallelMultimodalProcessor:
         Returns:
             List[MultimodalResult]: 解析结果列表，顺序与输入一致
         """
-        results = [None] * len(items)
+        if not items:
+            return []
 
-        def process_item(index: int, item: Dict[str, Any]) -> tuple:
+        results = [None] * len(items)
+        pending_indices = iter(range(len(items)))
+
+        def process_item(index: int) -> tuple:
+            item = items[index]
             content_type = item.get('type')
             data = item.get('data')
             result = self._parse_item(content_type, data)
             return (index, result)
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_index = {
-                executor.submit(process_item, i, item): i
-                for i, item in enumerate(items)
-            }
-            for future in as_completed(future_to_index):
-                index, result = future.result()
+            # 初始提交：填满线程池
+            pending_futures = {}
+            for _ in range(min(self.max_workers, len(items))):
+                idx = next(pending_indices, None)
+                if idx is not None:
+                    future = executor.submit(process_item, idx)
+                    pending_futures[future] = idx
+
+            # 动态补充：完成一个，提交一个
+            while pending_futures:
+                # 等待任意一个任务完成
+                completed = next(as_completed(pending_futures))
+                idx = pending_futures.pop(completed)
+                index, result = completed.result()
                 results[index] = result
+
+                # 立即补充下一个任务（如果还有）
+                next_idx = next(pending_indices, None)
+                if next_idx is not None:
+                    new_future = executor.submit(process_item, next_idx)
+                    pending_futures[new_future] = next_idx
 
         return results
 
@@ -68,7 +111,9 @@ class ParallelMultimodalProcessor:
         items: List[Dict[str, Any]],
         callback: Callable[[int, MultimodalResult], None]
     ) -> List[MultimodalResult]:
-        """批量处理多模态内容，带回调函数
+        """批量处理多模态内容，带回调函数（滑动窗口模式）
+
+        优化策略：批量提交 + 动态补充，避免一次性创建大量Future对象
 
         Args:
             items: 待处理的项目列表
@@ -77,23 +122,42 @@ class ParallelMultimodalProcessor:
         Returns:
             List[MultimodalResult]: 解析结果列表，顺序与输入一致
         """
-        results = [None] * len(items)
+        if not items:
+            return []
 
-        def process_item_with_callback(index: int, item: Dict[str, Any]) -> tuple:
+        results = [None] * len(items)
+        pending_indices = iter(range(len(items)))
+
+        def process_item_with_callback(index: int) -> tuple:
+            item = items[index]
             content_type = item.get('type')
             data = item.get('data')
             result = self._parse_item(content_type, data)
             callback(index, result)
-            return index, result
+            return (index, result)
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            future_to_index = {
-                executor.submit(process_item_with_callback, i, item): i
-                for i, item in enumerate(items)
-            }
-            for future in as_completed(future_to_index):
-                index, result = future.result()
+            # 初始提交：填满线程池
+            pending_futures = {}
+            for _ in range(min(self.max_workers, len(items))):
+                idx = next(pending_indices, None)
+                if idx is not None:
+                    future = executor.submit(process_item_with_callback, idx)
+                    pending_futures[future] = idx
+
+            # 动态补充：完成一个，提交一个
+            while pending_futures:
+                # 等待任意一个任务完成
+                completed = next(as_completed(pending_futures))
+                idx = pending_futures.pop(completed)
+                index, result = completed.result()
                 results[index] = result
+
+                # 立即补充下一个任务（如果还有）
+                next_idx = next(pending_indices, None)
+                if next_idx is not None:
+                    new_future = executor.submit(process_item_with_callback, next_idx)
+                    pending_futures[new_future] = next_idx
 
         return results
 
