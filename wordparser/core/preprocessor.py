@@ -36,14 +36,11 @@ class Preprocessor:
                     run.text = self.CONTROL_CHARS_RE.sub("", run.text)
 
     def _normalize_whitespace(self, doc: Document) -> None:
-        """去除每个 run 首尾空白字符。
+        """去除每个 run 尾部多余空白。
 
-        注意：此方法仅处理 run 级别的首尾空白，不主动合并文本内部的连续空格。
-        内部连续空白的归一化依赖于 python-docx 保存/加载时 XML 层面对
-        ``xml:space="preserve"`` 的默认处理行为——加载文档时，docx 格式本身会
-        将多余空白折叠为单个空格。因此最终效果是完整的空白归一化，但本方法
-        单独使用时并不保证这一点。
+        仅使用 rstrip 保留 run 间的前导空格，避免跨 run 文字粘连。
+        例如 run1="hello " + run2=" world" → rstrip 后 "hello" + " world"。
         """
         for para in doc.paragraphs:
             for run in para.runs:
-                run.text = run.text.strip()
+                run.text = run.text.rstrip()

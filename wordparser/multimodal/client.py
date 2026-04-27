@@ -33,6 +33,7 @@ class OpenAICompatibleVisionClient:
         model: str = "llava",
         max_tokens: int = 1000,
         temperature: float = 0.7,
+        timeout: int = 600,
     ):
         """初始化客户端
 
@@ -42,17 +43,20 @@ class OpenAICompatibleVisionClient:
             model: 模型名称
             max_tokens: 最大生成token数
             temperature: 温度参数
+            timeout: 请求超时时间（秒）
         """
         self.api_key = api_key or os.getenv("OPENAI_API_KEY", "test-key")
         self.base_url = base_url or os.getenv("OPENAI_BASE_URL", "http://localhost:11434/v1")
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
+        self.timeout = timeout
 
         # 初始化OpenAI客户端
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
+            timeout=self.timeout,
         )
 
     def parse_from_bytes(
@@ -105,7 +109,7 @@ class OpenAICompatibleVisionClient:
                     ],
                 }
             ],
-            max_tokens=max_tokens or self.max_tokens,
+            max_tokens=max_tokens if max_tokens is not None else self.max_tokens,
             temperature=temperature if temperature is not None else self.temperature,
         )
 
@@ -175,7 +179,7 @@ class OpenAICompatibleVisionClient:
                     "content": prompt,
                 }
             ],
-            max_tokens=max_tokens or self.max_tokens,
+            max_tokens=max_tokens if max_tokens is not None else self.max_tokens,
             temperature=temperature if temperature is not None else self.temperature,
         )
 

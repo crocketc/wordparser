@@ -8,7 +8,7 @@ from typing import Optional
 
 import typer
 
-from wordparser import ParserConfig, MultimodalConfig, VisionModelConfig, WordParser, TOCPosition
+from wordparser import ParserConfig, MultimodalConfig, VisionModelConfig, WordParser
 
 app = typer.Typer(
     name="wordparser",

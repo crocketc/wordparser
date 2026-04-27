@@ -6,16 +6,9 @@
 - 返回图片元信息
 """
 
-import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional
-from docx import Document
+from typing import List, Dict, Any
 from docx.document import Document as DocxDocument
-from docx.oxml.shape import CT_Picture
-from docx.oxml.table import CT_Tbl
-from docx.oxml.text.paragraph import CT_P
-from docx.oxml import parse_xml, register_element_cls
-import io
 
 
 class ImageExtractor:
@@ -111,28 +104,3 @@ class ImageExtractor:
             "image/svg+xml": ".svg",
         }
         return mapping.get(content_type, ".bin")
-
-    def extract_from_paragraphs(self, doc: DocxDocument, image_prefix: str = "image") -> List[Dict[str, Any]]:
-        """从段落中提取图片（备用方法）
-
-        Args:
-            doc: docx Document对象
-            image_prefix: 图片文件名前缀
-
-        Returns:
-            图片信息列表
-        """
-        images = []
-        image_index = 0
-
-        for para_idx, paragraph in enumerate(doc.paragraphs):
-            # 检查段落中的runs是否包含图片
-            for run in paragraph.runs:
-                if hasattr(run, '_element'):
-                    # 查找图片元素
-                    for element in run._element.iter():
-                        if element.tag.endswith('}blip') or element.tag.endswith('}graphic'):
-                            # 这里需要更复杂的处理来提取图片
-                            pass
-
-        return images

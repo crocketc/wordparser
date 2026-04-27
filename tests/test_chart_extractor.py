@@ -103,10 +103,10 @@ class TestChartExtractor:
         assert "Test Chart" in text
         assert "S1" in text
 
-    def test_chart_type_mapping(self):
-        assert self.extractor._map_chart_type("barChart") == "bar"
-        assert self.extractor._map_chart_type("lineChart") == "line"
-        assert self.extractor._map_chart_type("pieChart") == "pie"
-        assert self.extractor._map_chart_type("areaChart") == "area"
-        assert self.extractor._map_chart_type("scatterChart") == "scatter"
-        assert self.extractor._map_chart_type("unknownChart") == "unknown"
+    def test_chart_type_detection(self):
+        assert self.extractor._detect_chart_type("<c:barChart/>") == "bar"
+        assert self.extractor._detect_chart_type("<c:lineChart/>") == "line"
+        assert self.extractor._detect_chart_type("<c:pieChart/>") == "pie"
+        assert self.extractor._detect_chart_type("<c:areaChart/>") == "area"
+        assert self.extractor._detect_chart_type("<c:scatterChart/>") == "scatter"
+        assert self.extractor._detect_chart_type("<c:unknownElement/>") == "unknown"

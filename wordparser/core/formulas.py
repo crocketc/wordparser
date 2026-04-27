@@ -175,18 +175,17 @@ class FormulaProcessor:
         </m:d>
         -> \\left(内容\\right)
         """
-        # 提取开始字符
-        beg_chr_match = re.search(r'<m:begChr[^>]*>([^<]+)</m:begChr>', omml)
-        beg_chr = beg_chr_match.group(1) if beg_chr_match else '('
-
-        # 提取结束字符
-        end_chr_match = re.search(r'<m:endChr[^>]*>([^<]+)</m:endChr>', omml)
-        end_chr = end_chr_match.group(1) if end_chr_match else ')'
-
-        # 匹配整个分隔符
         pattern = r'<m:d[^>]*>.*?<m:e[^>]*>(.*?)</m:e>.*?</m:d>'
 
         def replace_delimiter(match):
+            block = match.group(0)
+            # 在当前 <m:d> 块内搜索 begChr/endChr
+            beg_chr_match = re.search(r'<m:begChr[^>]*>([^<]+)</m:begChr>', block)
+            beg_chr = beg_chr_match.group(1) if beg_chr_match else '('
+
+            end_chr_match = re.search(r'<m:endChr[^>]*>([^<]+)</m:endChr>', block)
+            end_chr = end_chr_match.group(1) if end_chr_match else ')'
+
             content = self._extract_text(match.group(1))
             return f"\\left{beg_chr}{content}\\right{end_chr}"
 

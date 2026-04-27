@@ -41,6 +41,27 @@ class ChartExtractor:
 
         return results
 
+    def extract_by_rid(self, docx_path: Path, rid_to_target: dict[str, str]) -> dict[str, ChartData]:
+        """按 rId 提取 Chart 数据，返回 {rId: ChartData}。
+
+        Args:
+            docx_path: .docx 文件路径
+            rid_to_target: {rId: "charts/chart1.xml"} 映射，从 rels 中获取
+        """
+        results: dict[str, ChartData] = {}
+        docx_path = Path(docx_path)
+
+        with zipfile.ZipFile(docx_path, "r") as zf:
+            for rId, target in rid_to_target.items():
+                chart_path = f"word/{target}" if not target.startswith("word/") else target
+                if chart_path in zf.namelist():
+                    xml_content = zf.read(chart_path).decode("utf-8")
+                    chart_data = self._parse_chart_xml(xml_content)
+                    if chart_data:
+                        results[rId] = chart_data
+
+        return results
+
     def _parse_chart_xml(self, xml_content: str) -> Optional[ChartData]:
         chart_type = self._detect_chart_type(xml_content)
         title = self._extract_title(xml_content)
@@ -73,16 +94,6 @@ class ChartExtractor:
             if tag in xml:
                 return ctype
         return "unknown"
-
-    def _map_chart_type(self, xml_tag: str) -> str:
-        mapping = {
-            "barChart": "bar",
-            "lineChart": "line",
-            "pieChart": "pie",
-            "areaChart": "area",
-            "scatterChart": "scatter",
-        }
-        return mapping.get(xml_tag, "unknown")
 
     def _extract_title(self, xml: str) -> Optional[str]:
         if re.search(r'autoTitleDeleted[^>]*val="1"', xml):

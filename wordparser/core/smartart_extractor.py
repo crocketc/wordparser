@@ -32,6 +32,27 @@ class SmartArtExtractor:
 
         return results
 
+    def extract_by_rid(self, docx_path: Path, rid_to_target: dict[str, str]) -> dict[str, SmartArtData]:
+        """按 rId 提取 SmartArt 数据，返回 {rId: SmartArtData}。
+
+        Args:
+            docx_path: .docx 文件路径
+            rid_to_target: {rId: "diagrams/data1.xml"} 映射
+        """
+        results: dict[str, SmartArtData] = {}
+        docx_path = Path(docx_path)
+
+        with zipfile.ZipFile(docx_path, "r") as zf:
+            for rId, target in rid_to_target.items():
+                sa_path = f"word/{target}" if not target.startswith("word/") else target
+                if sa_path in zf.namelist():
+                    xml_content = zf.read(sa_path).decode("utf-8")
+                    sa_data = self._parse_smartart_xml(xml_content)
+                    if sa_data:
+                        results[rId] = sa_data
+
+        return results
+
     def _parse_smartart_xml(self, xml_content: str) -> Optional[SmartArtData]:
         points = self._extract_points(xml_content)
         connections = self._extract_connections(xml_content)

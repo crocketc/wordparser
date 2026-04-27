@@ -249,12 +249,27 @@ class WordParser:
         """并行解析图片、Chart、SmartArt、复杂表格"""
         max_workers = self.config.multimodal.max_concurrent if self.config.multimodal else 2
 
+        # 构建 rId → target 映射（用于 Chart/SmartArt 精确关联）
+        rid_targets = self._resolve_rid_targets(doc)
+
         image_descs = self._parse_images_parallel(doc, rich_ids.get("img", {}), max_workers)
-        chart_descs = self._parse_charts(docx_path)
-        sa_descs = self._parse_smartarts(docx_path)
-        table_descs = self._parse_complex_tables_parallel(doc, rich_ids.get("table", {}), max_workers)
+        chart_descs = self._parse_charts(docx_path, rich_ids.get("chart", {}), rid_targets)
+        sa_descs = self._parse_smartarts(docx_path, rich_ids.get("sa", {}), rid_targets)
+        table_descs = self._parse_complex_tables_parallel(doc, max_workers)
 
         return image_descs, chart_descs, sa_descs, table_descs
+
+    def _resolve_rid_targets(self, doc) -> dict[str, str]:
+        """从文档 rels 中解析 rId → target 映射"""
+        rid_map: dict[str, str] = {}
+        try:
+            for rId, rel in doc.part.rels.items():
+                target = rel.target_ref
+                if target:
+                    rid_map[rId] = target
+        except Exception:
+            pass
+        return rid_map
 
     def _parse_images_parallel(self, doc, img_ids: dict, max_workers: int) -> dict[str, str]:
         """并行解析嵌入图片"""
@@ -283,7 +298,7 @@ class WordParser:
 
         return image_map
 
-    def _parse_complex_tables_parallel(self, doc, table_ids: dict, max_workers: int) -> dict[int, str]:
+    def _parse_complex_tables_parallel(self, doc, max_workers: int) -> dict[int, str]:
         """并行解析复杂表格，返回 {table_element_id: description}"""
         if not table_ids:
             return {}
@@ -347,38 +362,63 @@ class WordParser:
         """
         return f"\n```{content_type}\n{content}\n```\n"
 
-    def _parse_charts(self, docx_path: Path) -> dict[int, str]:
-        """并行解析 Chart 图表，返回 {index: description}"""
+    def _parse_charts(self, docx_path: Path, chart_ids: dict, rid_targets: dict[str, str]) -> dict[int, str]:
+        """并行解析 Chart 图表，通过 rId 确保索引对齐，返回 {index: description}"""
         if not self.vision_client:
             return {}
 
         try:
-            chart_data_list = self.chart_extractor.extract(docx_path)
+            # 优先使用 rId 关联提取
+            if chart_ids and rid_targets:
+                chart_rid_targets = {
+                    rId: rid_targets[rId]
+                    for rId in chart_ids.values()
+                    if rId in rid_targets
+                }
+                if chart_rid_targets:
+                    chart_data_by_rid = self.chart_extractor.extract_by_rid(docx_path, chart_rid_targets)
+                else:
+                    chart_data_by_rid = {}
+            else:
+                chart_data_by_rid = {}
+
+            # 如果 rId 关联未覆盖全部，回退到文件顺序提取
+            if len(chart_data_by_rid) < len(chart_ids):
+                chart_data_list = self.chart_extractor.extract(docx_path)
+            else:
+                chart_data_list = None
         except Exception as e:
             logger.warning(f"Chart 提取失败: {e}")
             return {}
 
-        if not chart_data_list:
-            return {}
-
         max_workers = self.config.multimodal.max_concurrent if self.config.multimodal else 2
 
-        def _parse_one(index: int, chart_data):
+        def _parse_one(idx: int, chart_data):
             try:
                 r = self.multimodal_parser.parse_chart_with_data(chart_data, docx_path)
-                return index, r.content
+                return idx, r.content
             except Exception as e:
-                return index, f"[图表解析失败: {e}]"
+                return idx, f"[图表解析失败: {e}]"
 
         result: dict[int, str] = {}
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(_parse_one, i, chart_data): i for i, chart_data in enumerate(chart_data_list)}
+            futures = {}
+            if chart_data_by_rid:
+                # 使用 rId 关联：将 rId 映射回 chart_idx
+                for chart_idx, rId in chart_ids.items():
+                    if rId in chart_data_by_rid:
+                        futures[pool.submit(_parse_one, chart_idx, chart_data_by_rid[rId])] = chart_idx
+            elif chart_data_list:
+                # 回退：使用文件顺序
+                for i, cd in enumerate(chart_data_list):
+                    futures[pool.submit(_parse_one, i, cd)] = i
+
             for future in as_completed(futures):
                 index, desc = future.result()
                 result[index] = desc
         return result
 
-    def _parse_smartarts(self, docx_path: Path) -> dict[int, str]:
+    def _parse_smartarts(self, docx_path: Path, sa_ids: dict, rid_targets: dict[str, str]) -> dict[int, str]:
         """并行解析 SmartArt，返回 {index: description}"""
         if not self.vision_client:
             return {}
@@ -480,6 +520,9 @@ class WordParser:
                 if ph in markdown:
                     markdown = markdown.replace(ph, self._wrap_multimodal_result(desc, "table"))
 
+        # 清理未替换的残留占位符
+        markdown = re.sub(r"\[__WP_(?:IMG|CHART|SA|TABLE)_[^\]]+__\]", "", markdown)
+
         return markdown
 
     def _append_block_markdown(self, block, lines: list[str]) -> None:
@@ -548,6 +591,8 @@ class WordParser:
                     del counters[k]
             parts = [str(counters[l]) for l in sorted(counters.keys())]
             number = ".".join(parts)
+            if prefix:
+                number = f"{prefix}.{number}"
             headings.append(Heading(level=node.level, text=node.text, number=number))
             self._collect_headings(node.children, headings, number)
 

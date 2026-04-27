@@ -20,8 +20,17 @@
 | **SmartArt** | XML 数据提取 + LLM 语义理解 | ✅ 已实现 |
 | **公式转换** | OMML → LaTeX | ✅ 已实现 |
 | **目录生成** | 自动生成带锚点的 MD 目录 | ✅ 已实现 |
-| **页眉页脚** | 可选提取页眉页脚内容 | ✅ 已实现 |
 | **降级机制** | LibreOffice 渲染 + 视觉模型降级 | ✅ 已实现 |
+
+### 计划中功能
+
+| 功能 | 说明 | 状态 |
+|------|------|------|
+| **页眉页脚** | 提取页眉页脚内容 | 🚧 配置项预留，未实现 |
+| **批注处理** | 提取文档批注 | 🚧 配置项预留，未实现 |
+| **脚注处理** | 提取文档脚注 | 🚧 配置项预留，未实现 |
+
+> 📋 **完整功能规范**: 查看 [OpenSpec 规范文档](openspec/specs/wordparser-core/spec.md) 了解详细的功能规格和场景定义。
 
 ### 技术亮点
 
@@ -132,28 +141,25 @@ print(f"图片数: {report.stats.total_images}")
 
 ### ParserConfig
 
-所有配置项默认值见 `wordparser/config.py` 中的 `ParserConfig` 类定义。
-
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `max_heading_level` | int | 见 config.py | 最大标题级别 |
-| `generate_toc` | bool | 见 config.py | 是否生成目录 |
-| `toc_position` | TOCPosition | AFTER_TITLE | 目录位置 |
-| `enable_render_fallback` | bool | 见 config.py | 启用渲染降级 |
-| `libreoffice_path` | str \| None | None | LibreOffice 路径 |
+| `max_heading_level` | int | 6 | 最大标题级别（1-6） |
+| `generate_toc` | bool | True | 是否生成目录 |
+| `toc_position` | TOCPosition | AFTER_TITLE | 目录位置（BEFORE_TITLE/AFTER_TITLE） |
+| `enable_render_fallback` | bool | True | 启用渲染降级 |
+| `libreoffice_path` | str \| None | None | LibreOffice 路径（自动检测） |
 | `encoding` | str | "utf-8" | 输出编码 |
-| `include_header_footer` | bool | False | 包含页眉页脚 |
-| `include_footnotes` | bool | False | 包含脚注 |
+| `include_header_footer` | bool | False | 包含页眉页脚（未实现） |
+| `include_footnotes` | bool | False | 包含脚注（未实现） |
+| `include_comments` | bool | False | 包含批注（未实现） |
 
 ### MultimodalConfig
 
-所有配置项默认值见 `wordparser/config.py` 中的 `MultimodalConfig` 类定义。
-
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `max_concurrent` | int | 见 config.py | 最大并发数 |
-| `batch_delay` | float | 见 config.py | 批次延迟（秒） |
-| `retry_on_failure` | bool | 见 config.py | 失败重试 |
+| `max_concurrent` | int | 6 | 最大并发数 |
+| `batch_delay` | float | 0.1 | 批次延迟（秒） |
+| `retry_on_failure` | bool | True | 失败重试 |
 | `model` | VisionModelConfig | - | 视觉模型配置 |
 
 ### VisionModelConfig
@@ -161,7 +167,7 @@ print(f"图片数: {report.stats.total_images}")
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `base_url` | str | "http://localhost:1234/v1" | API 地址 |
-| `model` | str | "qwen3.5-9b" | 模型名称 |
+| `model` | str | "qwen3.5-4b" | 模型名称 |
 | `api_key` | str \| None | None | API 密钥 |
 | `timeout` | int | 600 | 超时时间（秒） |
 | `temperature` | float | 0.0 | 温度参数 |
@@ -195,6 +201,12 @@ Document_Parsing/
 │       └── prompts.py               # Prompt 模板
 ├── wordparser_cli/                  # CLI 工具
 │   └── main.py                      # typer app
+├── openspec/                        # OpenSpec 规范
+│   ├── specs/                       # 功能规范
+│   │   └── wordparser-core/         # 核心功能规范
+│   │       └── spec.md              # 详细功能规格
+│   ├── changes/                     # 变更记录
+│   └── config.yaml                  # OpenSpec 配置
 ├── tests/                           # 测试
 ├── docs/                            # 文档
 ├── wordparser.bat                   # Windows 启动器
@@ -218,6 +230,24 @@ pytest --cov=wordparser --cov-report=html
 - 语言：简体中文（注释、文档）
 - 编码：UTF-8
 - Python 版本：≥ 3.10
+
+## 限制和已知问题
+
+### 功能限制
+
+1. **页眉页脚**: 配置项存在但未实现，当前版本不支持提取
+2. **批注**: 配置项存在但未实现，当前版本不支持提取
+3. **脚注**: 配置项存在但未实现，当前版本不支持提取
+4. **样式**: 不保留原始文档的样式信息（字体、颜色等）
+5. **宏**: 不支持 VBA 宏
+
+### 已知问题
+
+1. **复杂嵌套表格**: Markdown 重建可能不完美
+2. **多模态依赖**: 依赖外部 API，可用性取决于模型服务
+3. **格式丢失**: LibreOffice 转换可能丢失某些格式信息
+
+---
 
 ## 常见问题
 
@@ -243,4 +273,4 @@ MIT License
 
 ---
 
-*最后更新: 2026-04-24*
+*最后更新: 2026-04-27*

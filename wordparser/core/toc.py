@@ -1,6 +1,7 @@
 """目录生成器"""
 from typing import List, Optional
 from dataclasses import dataclass
+from wordparser.core.structure import make_anchor
 
 
 @dataclass
@@ -84,25 +85,8 @@ class TOCGenerator:
         return "\n".join(lines)
 
     def _create_anchor(self, text: str) -> str:
-        """创建锚点标识符
-
-        Args:
-            text: 标题文本
-
-        Returns:
-            str: 锚点标识符
-        """
-        # 转换为小写
-        anchor = text.lower()
-
-        # 替换空格和特殊字符为连字符
-        import re
-        anchor = re.sub(r'[^\w一-鿿]+', '-', anchor)
-
-        # 移除首尾连字符
-        anchor = anchor.strip('-')
-
-        return anchor
+        """创建锚点标识符（使用统一的锚点生成函数）"""
+        return make_anchor(text)
 
     def generate_with_depth_indicators(
         self,

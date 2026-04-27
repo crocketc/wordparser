@@ -5,6 +5,7 @@ from docx.document import Document
 
 from wordparser.core.models import BlockType, ContentBlock, TitleNode
 from wordparser.config import ParserConfig
+from wordparser.core.formulas import FormulaProcessor
 
 _HEADING_NUMBER_RE = re.compile(
     r"^(\d+(\.\d+)*[\.\s、])+[\s]*"
@@ -15,11 +16,22 @@ R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
 
+def make_anchor(text: str) -> str:
+    """统一的锚点生成函数，供 structure 和 toc 模块共用。
+
+    规则：转小写 + 非词字符替换为连字符 + 去首尾连字符。
+    """
+    anchor = text.lower()
+    anchor = re.sub(r"[^\w一-鿿]+", "-", anchor)
+    return anchor.strip("-")
+
+
 class StructureParser:
     def __init__(self, config: ParserConfig | None = None):
         self.config = config or ParserConfig()
         self._title_tree: list[TitleNode] = []
         self._doc_part = None  # 延迟设置，用于解析超链接
+        self._formula_processor = FormulaProcessor()
 
     def set_doc_part(self, doc_part) -> None:
         self._doc_part = doc_part
@@ -46,7 +58,7 @@ class StructureParser:
         level = self._extract_heading_level(style_name)
         text = para.text.strip()
         text = self._strip_heading_number(text)
-        anchor = self._generate_anchor(text)
+        anchor = make_anchor(text)
 
         node = TitleNode(level=level, text=text, anchor=anchor)
         self._add_to_title_tree(node)
@@ -64,9 +76,6 @@ class StructureParser:
 
     def _strip_heading_number(self, text: str) -> str:
         return _HEADING_NUMBER_RE.sub("", text).strip()
-
-    def _generate_anchor(self, text: str) -> str:
-        return re.sub(r"[^\w一-鿿]+", "", text)
 
     def _add_to_title_tree(self, node: TitleNode) -> None:
         self._insert_into_tree(self._title_tree, node)
@@ -194,10 +203,8 @@ class StructureParser:
 
     def _format_formula(self, omath_element, inline: bool = True) -> str:
         """格式化 m:oMath 元素为 LaTeX 公式"""
-        from wordparser.core.formulas import FormulaProcessor
-
         omml_str = _element_to_string(omath_element)
-        latex = FormulaProcessor().omml_to_latex(omml_str)
+        latex = self._formula_processor.omml_to_latex(omml_str)
 
         if inline:
             return f"${latex}$"
