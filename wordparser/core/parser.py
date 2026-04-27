@@ -300,9 +300,6 @@ class WordParser:
 
     def _parse_complex_tables_parallel(self, doc, max_workers: int) -> dict[int, str]:
         """并行解析复杂表格，返回 {table_element_id: description}"""
-        if not table_ids:
-            return {}
-
         self._ensure_vision_client()
 
         # 收集所有复杂表格

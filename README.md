@@ -26,7 +26,6 @@
 
 | 功能 | 说明 | 状态 |
 |------|------|------|
-| **页眉页脚** | 提取页眉页脚内容 | 🚧 配置项预留，未实现 |
 | **批注处理** | 提取文档批注 | 🚧 配置项预留，未实现 |
 | **脚注处理** | 提取文档脚注 | 🚧 配置项预留，未实现 |
 
@@ -149,7 +148,7 @@ print(f"图片数: {report.stats.total_images}")
 | `enable_render_fallback` | bool | True | 启用渲染降级 |
 | `libreoffice_path` | str \| None | None | LibreOffice 路径（自动检测） |
 | `encoding` | str | "utf-8" | 输出编码 |
-| `include_header_footer` | bool | False | 包含页眉页脚（未实现） |
+| `include_header_footer` | bool | False | 包含页眉页脚 |
 | `include_footnotes` | bool | False | 包含脚注（未实现） |
 | `include_comments` | bool | False | 包含批注（未实现） |
 
@@ -235,11 +234,10 @@ pytest --cov=wordparser --cov-report=html
 
 ### 功能限制
 
-1. **页眉页脚**: 配置项存在但未实现，当前版本不支持提取
-2. **批注**: 配置项存在但未实现，当前版本不支持提取
-3. **脚注**: 配置项存在但未实现，当前版本不支持提取
-4. **样式**: 不保留原始文档的样式信息（字体、颜色等）
-5. **宏**: 不支持 VBA 宏
+1. **批注**: 配置项存在但未实现，当前版本不支持提取
+2. **脚注**: 配置项存在但未实现，当前版本不支持提取
+3. **样式**: 不保留原始文档的样式信息（字体、颜色等）
+4. **宏**: 不支持 VBA 宏
 
 ### 已知问题
 

@@ -75,13 +75,14 @@ class ParserConfig:
         enable_render_fallback: 是否启用渲染降级（XML+LLM 失败时尝试 LibreOffice 渲染+视觉识别）
         generate_toc: 是否自动生成目录
         toc_position: 目录插入位置（文档标题前或后）
-        include_header_footer: 是否提取页眉页脚（⚠️ 当前版本未实现）
+        include_header_footer: 是否提取页眉页脚
         include_comments: 是否提取文档批注（⚠️ 当前版本未实现）
         include_footnotes: 是否提取文档脚注（⚠️ 当前版本未实现）
 
     Note:
-        include_header_footer、include_comments、include_footnotes 配置项已预留，
+        include_comments、include_footnotes 配置项已预留，
         但当前版本尚未实现，设为 True 不会生效。
+        include_header_footer 已实现，可直接使用。
     """
     max_heading_level: int = 6                   # 最大标题层级（1-6）
     encoding: str = "utf-8"                      # 输出编码
@@ -90,6 +91,6 @@ class ParserConfig:
     enable_render_fallback: bool = True          # 启用渲染降级
     generate_toc: bool = True                    # 生成目录
     toc_position: TOCPosition = TOCPosition.AFTER_TITLE  # 目录位置
-    include_header_footer: bool = False          # 包含页眉页脚（⚠️ 未实现）
+    include_header_footer: bool = False          # 包含页眉页脚
     include_comments: bool = False               # 包含批注（⚠️ 未实现）
     include_footnotes: bool = False              # 包含脚注（⚠️ 未实现）
