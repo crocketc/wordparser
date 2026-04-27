@@ -272,7 +272,7 @@ class WordParser:
         return rid_map
 
     def _parse_images_parallel(self, doc, img_ids: dict, max_workers: int) -> dict[str, str]:
-        """并行解析嵌入图片"""
+        """并行解析嵌入图片（滑动窗口模式）"""
         if not img_ids:
             return {}
 
@@ -290,16 +290,37 @@ class WordParser:
                 return rId, f"[图片解析失败: {e}]"
 
         image_map: dict[str, str] = {}
+        img_id_list = list(img_ids.keys())
+        pending_indices = iter(range(len(img_id_list)))
+
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(_parse_one, rId): rId for rId in img_ids}
-            for future in as_completed(futures):
-                rId, desc = future.result()
-                image_map[rId] = desc
+            # 初始提交：填满线程池
+            pending_futures = {}
+            for _ in range(min(max_workers, len(img_id_list))):
+                idx = next(pending_indices, None)
+                if idx is not None:
+                    rId = img_id_list[idx]
+                    future = pool.submit(_parse_one, rId)
+                    pending_futures[future] = rId
+
+            # 动态补充：完成一个，提交一个
+            while pending_futures:
+                completed = next(as_completed(pending_futures))
+                rId = pending_futures.pop(completed)
+                rId_result, desc = completed.result()
+                image_map[rId_result] = desc
+
+                # 立即补充下一个任务（如果还有）
+                next_idx = next(pending_indices, None)
+                if next_idx is not None:
+                    next_rId = img_id_list[next_idx]
+                    new_future = pool.submit(_parse_one, next_rId)
+                    pending_futures[new_future] = next_rId
 
         return image_map
 
     def _parse_complex_tables_parallel(self, doc, max_workers: int) -> dict[int, str]:
-        """并行解析复杂表格，返回 {table_element_id: description}"""
+        """并行解析复杂表格（滑动窗口模式）"""
         self._ensure_vision_client()
 
         # 收集所有复杂表格
@@ -326,11 +347,31 @@ class WordParser:
                 return tbl_elem, f"[复杂表格解析失败: {e}]"
 
         table_map: dict[int, str] = {}
+        pending_indices = iter(range(len(complex_tables)))
+
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(_parse_one, tbl_elem, table): tbl_elem for tbl_elem, table in complex_tables}
-            for future in as_completed(futures):
-                tbl_elem, desc = future.result()
-                table_map[id(tbl_elem)] = desc
+            # 初始提交：填满线程池
+            pending_futures = {}
+            for _ in range(min(max_workers, len(complex_tables))):
+                idx = next(pending_indices, None)
+                if idx is not None:
+                    tbl_elem, table = complex_tables[idx]
+                    future = pool.submit(_parse_one, tbl_elem, table)
+                    pending_futures[future] = tbl_elem
+
+            # 动态补充：完成一个，提交一个
+            while pending_futures:
+                completed = next(as_completed(pending_futures))
+                tbl_elem = pending_futures.pop(completed)
+                tbl_elem_result, desc = completed.result()
+                table_map[id(tbl_elem_result)] = desc
+
+                # 立即补充下一个任务（如果还有）
+                next_idx = next(pending_indices, None)
+                if next_idx is not None:
+                    next_tbl_elem, next_table = complex_tables[next_idx]
+                    new_future = pool.submit(_parse_one, next_tbl_elem, next_table)
+                    pending_futures[new_future] = next_tbl_elem
 
         return table_map
 
@@ -397,22 +438,48 @@ class WordParser:
             except Exception as e:
                 return idx, f"[图表解析失败: {e}]"
 
-        result: dict[int, str] = {}
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {}
-            if chart_data_by_rid:
-                # 使用 rId 关联：将 rId 映射回 chart_idx
-                for chart_idx, rId in chart_ids.items():
-                    if rId in chart_data_by_rid:
-                        futures[pool.submit(_parse_one, chart_idx, chart_data_by_rid[rId])] = chart_idx
-            elif chart_data_list:
-                # 回退：使用文件顺序
-                for i, cd in enumerate(chart_data_list):
-                    futures[pool.submit(_parse_one, i, cd)] = i
+        # 构建待处理任务列表
+        tasks = []
+        if chart_data_by_rid:
+            # 使用 rId 关联：将 rId 映射回 chart_idx
+            for chart_idx, rId in chart_ids.items():
+                if rId in chart_data_by_rid:
+                    tasks.append((chart_idx, chart_data_by_rid[rId]))
+        elif chart_data_list:
+            # 回退：使用文件顺序
+            for i, cd in enumerate(chart_data_list):
+                tasks.append((i, cd))
 
-            for future in as_completed(futures):
-                index, desc = future.result()
+        if not tasks:
+            return {}
+
+        result: dict[int, str] = {}
+        pending_indices = iter(range(len(tasks)))
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            # 初始提交：填满线程池
+            pending_futures = {}
+            for _ in range(min(max_workers, len(tasks))):
+                idx = next(pending_indices, None)
+                if idx is not None:
+                    chart_idx, chart_data = tasks[idx]
+                    future = pool.submit(_parse_one, chart_idx, chart_data)
+                    pending_futures[future] = chart_idx
+
+            # 动态补充：完成一个，提交一个
+            while pending_futures:
+                completed = next(as_completed(pending_futures))
+                chart_idx = pending_futures.pop(completed)
+                index, desc = completed.result()
                 result[index] = desc
+
+                # 立即补充下一个任务（如果还有）
+                next_idx = next(pending_indices, None)
+                if next_idx is not None:
+                    next_chart_idx, next_chart_data = tasks[next_idx]
+                    new_future = pool.submit(_parse_one, next_chart_idx, next_chart_data)
+                    pending_futures[new_future] = next_chart_idx
+
         return result
 
     def _parse_smartarts(self, docx_path: Path, sa_ids: dict, rid_targets: dict[str, str]) -> dict[int, str]:
@@ -439,11 +506,30 @@ class WordParser:
                 return index, f"[SmartArt解析失败: {e}]"
 
         result: dict[int, str] = {}
+        pending_indices = iter(range(len(sa_data_list)))
+
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(_parse_one, i, sa_data): i for i, sa_data in enumerate(sa_data_list)}
-            for future in as_completed(futures):
-                index, desc = future.result()
+            # 初始提交：填满线程池
+            pending_futures = {}
+            for _ in range(min(max_workers, len(sa_data_list))):
+                idx = next(pending_indices, None)
+                if idx is not None:
+                    future = pool.submit(_parse_one, idx, sa_data_list[idx])
+                    pending_futures[future] = idx
+
+            # 动态补充：完成一个，提交一个
+            while pending_futures:
+                completed = next(as_completed(pending_futures))
+                idx = pending_futures.pop(completed)
+                index, desc = completed.result()
                 result[index] = desc
+
+                # 立即补充下一个任务（如果还有）
+                next_idx = next(pending_indices, None)
+                if next_idx is not None:
+                    new_future = pool.submit(_parse_one, next_idx, sa_data_list[next_idx])
+                    pending_futures[new_future] = next_idx
+
         return result
 
     # ================================================================
