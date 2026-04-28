@@ -62,6 +62,27 @@ class MultimodalConfig:
 
 
 @dataclass
+class ManualHeadingConfig:
+    """手动标题启发式检测配置
+
+    控制对非 Heading 样式段落的标题识别行为。
+    通过字号、加粗、编号等多维信号打分，识别"手动标题"。
+
+    Attributes:
+        enabled: 是否启用手动标题检测
+        min_score: 成为候选标题的最低分数（满分约 8 分）
+        max_length: 候选标题最大字符数
+        font_size_delta: 字号偏差阈值（pt），超过正文基准字号此值视为大字号
+        bold_ratio_threshold: run 加粗占比阈值，超过此比例视为"整段加粗"
+    """
+    enabled: bool = True
+    min_score: int = 4
+    max_length: int = 80
+    font_size_delta: float = 2.0
+    bold_ratio_threshold: float = 0.8
+
+
+@dataclass
 class LoggingConfig:
     """日志配置
 
@@ -71,7 +92,7 @@ class LoggingConfig:
         enabled: 是否启用日志
         level: 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_file: 日志文件路径（None 表示仅控制台输出）
-        log_dir: 日志目录（默认: logs/）
+        log_dir: 日志目录（默认: logs/，相对路径基于项目根目录解析为绝对路径）
     """
     enabled: bool = True                       # 是否启用日志
     level: str = "INFO"                        # 日志级别
@@ -87,6 +108,7 @@ class ParserConfig:
 
     Attributes:
         max_heading_level: 最大解析的标题层级（1-6），超过此层级的标题转为普通段落
+        max_file_size_mb: 最大输入文件大小（MB），0 表示不限制（默认: 200）
         encoding: 输出 Markdown 文件的编码格式
         multimodal: 多模态处理配置（设为 None 则禁用多模态功能）
         libreoffice_path: LibreOffice 可执行文件路径（None 为自动检测）
@@ -96,7 +118,7 @@ class ParserConfig:
         include_header_footer: 是否提取页眉页脚
         include_comments: 是否提取文档批注（⚠️ 当前版本未实现）
         include_footnotes: 是否提取文档脚注（⚠️ 当前版本未实现）
-        logging: 日志配置
+        manual_heading: 手动标题启发式检测配置
         logging: 日志配置
 
     Note:
@@ -105,6 +127,7 @@ class ParserConfig:
         include_header_footer 已实现，可直接使用。
     """
     max_heading_level: int = 6                   # 最大标题层级（1-6）
+    max_file_size_mb: int = 200                  # 最大文件大小（MB），0 表示不限制
     encoding: str = "utf-8"                      # 输出编码
     multimodal: MultimodalConfig | None = field(default_factory=MultimodalConfig)  # 多模态配置
     libreoffice_path: str | None = None          # LibreOffice 路径（自动检测）
@@ -114,4 +137,5 @@ class ParserConfig:
     include_header_footer: bool = False          # 包含页眉页脚
     include_comments: bool = False               # 包含批注（⚠️ 未实现）
     include_footnotes: bool = False              # 包含脚注（⚠️ 未实现）
+    manual_heading: ManualHeadingConfig = field(default_factory=ManualHeadingConfig)  # 手动标题检测
     logging: LoggingConfig = field(default_factory=LoggingConfig)  # 日志配置

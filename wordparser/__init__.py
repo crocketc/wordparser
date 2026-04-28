@@ -7,7 +7,7 @@ from wordparser.config import *
 from wordparser.core.parser import WordParser
 from wordparser.core.report import ParseReport
 from wordparser.exceptions import *
-from wordparser.logger_config import setup_elk_logging, get_logger, get_context_logger
+from wordparser.logger_config import setup_elk_logging, get_logger, get_context_logger, configure_logging
 
 __all__ = [
     "WordParser",
@@ -60,18 +60,7 @@ def parse_word_to_markdown(
         from wordparser.config import ParserConfig
         config = ParserConfig()
 
-    if config.logging.enabled:
-        import logging
-        log_level = getattr(logging, config.logging.level.upper(), logging.INFO)
-        log_file = None
-        if config.logging.log_file:
-            log_file = config.logging.log_file
-        elif config.logging.log_dir:
-            from datetime import datetime
-            timestamp = datetime.now().strftime("%Y%m%d")
-            log_file = f"{config.logging.log_dir}/wordparser_{timestamp}.log"
-
-        setup_elk_logging(level=log_level, log_file=log_file)
+    configure_logging(config.logging)
 
     docx_path = Path(docx_path)
     parser = WordParser(config)

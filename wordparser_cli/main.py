@@ -3,12 +3,13 @@
 所有默认值动态从 config.py 读取，实现单一配置源（Single Source of Truth）
 """
 
+import logging
 from pathlib import Path
 from typing import Optional
 
 import typer
 
-from wordparser import ParserConfig, MultimodalConfig, VisionModelConfig, WordParser
+from wordparser import ParserConfig, MultimodalConfig, VisionModelConfig, WordParser, configure_logging
 
 app = typer.Typer(
     name="wordparser",
@@ -105,6 +106,8 @@ def parse(
             enable_render_fallback=render_fallback,
             libreoffice_path=libreoffice_path,
         )
+
+        configure_logging(config.logging)
 
         parser = WordParser(config)
 

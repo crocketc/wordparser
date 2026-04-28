@@ -78,6 +78,33 @@ def setup_elk_logging(
         root_logger.addHandler(file_handler)
 
 
+def configure_logging(logging_config) -> None:
+    """根据 LoggingConfig 统一配置日志系统
+
+    将相对路径 log_dir 基于 wordparser 包根目录解析为绝对路径，
+    确保 CLI 和库调用日志文件落在同一目录。
+
+    Args:
+        logging_config: LoggingConfig 实例
+    """
+    if not logging_config.enabled:
+        return
+
+    level = getattr(logging, logging_config.level.upper(), logging.INFO)
+    log_file = None
+    if logging_config.log_file:
+        log_file = logging_config.log_file
+    elif logging_config.log_dir:
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d")
+        log_dir = Path(logging_config.log_dir)
+        if not log_dir.is_absolute():
+            log_dir = Path(__file__).parent.parent / log_dir
+        log_file = str(log_dir / f"wordparser_{timestamp}.log")
+
+    setup_elk_logging(level=level, log_file=log_file)
+
+
 def get_logger(name: str) -> logging.Logger:
     """获取logger实例
 
