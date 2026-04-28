@@ -106,6 +106,14 @@ class WordParser:
         if not docx_path.exists():
             raise DocumentError(f"文件不存在: {docx_path}")
 
+        # 文件大小校验
+        if self.config.max_file_size_mb > 0:
+            file_size_mb = docx_path.stat().st_size / (1024 * 1024)
+            if file_size_mb > self.config.max_file_size_mb:
+                raise DocumentError(
+                    f"文件过大: {file_size_mb:.1f} MB，超过限制 {self.config.max_file_size_mb} MB"
+                )
+
         docx_path = self._ensure_docx(docx_path)
 
         supported = {".docx", ".doc"}
