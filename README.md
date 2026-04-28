@@ -145,6 +145,7 @@ print(f"图片数: {report.stats.total_images}")
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `max_heading_level` | int | 6 | 最大标题级别（1-6） |
+| `max_file_size_mb` | int | 200 | 最大文件大小（MB），0 表示不限制 |
 | `generate_toc` | bool | True | 是否生成目录 |
 | `toc_position` | TOCPosition | AFTER_TITLE | 目录位置（BEFORE_TITLE/AFTER_TITLE） |
 | `enable_render_fallback` | bool | True | 启用渲染降级 |
@@ -153,6 +154,7 @@ print(f"图片数: {report.stats.total_images}")
 | `include_header_footer` | bool | False | 包含页眉页脚 |
 | `include_footnotes` | bool | False | 包含脚注（未实现） |
 | `include_comments` | bool | False | 包含批注（未实现） |
+| `manual_heading` | ManualHeadingConfig | ManualHeadingConfig() | 手动标题检测配置 |
 | `logging` | LoggingConfig | LoggingConfig() | 日志配置 |
 
 ### MultimodalConfig
@@ -181,7 +183,23 @@ print(f"图片数: {report.stats.total_images}")
 | `enabled` | bool | True | 是否启用日志 |
 | `level` | str | "INFO" | 日志级别（DEBUG/INFO/WARNING/ERROR/CRITICAL） |
 | `log_file` | str \| None | None | 日志文件路径（None则按日期自动生成） |
-| `log_dir` | str | "logs" | 日志目录 |
+| `log_dir` | str | "logs" | 日志目录（相对路径基于项目根目录解析） |
+
+### ManualHeadingConfig
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `enabled` | bool | True | 是否启用手动标题检测 |
+| `min_score` | int | 4 | 成为候选标题的最低分数（满分约 8 分） |
+| `max_length` | int | 80 | 候选标题最大字符数 |
+| `font_size_delta` | float | 2.0 | 字号偏差阈值（pt） |
+| `bold_ratio_threshold` | float | 0.8 | run 加粗占比阈值 |
+
+手动标题检测会自动排除：
+- 图表标题（图/表/图表 + 数字编号）
+- 单位标注（单位：xxx）
+- 带圈数字脚注（①②③...）
+- 数字+右括号短列表（1）xxx）
 
 ## 项目结构
 
