@@ -62,6 +62,24 @@ class MultimodalConfig:
 
 
 @dataclass
+class LoggingConfig:
+    """日志配置
+
+    配置ELK日志系统行为。
+
+    Attributes:
+        enabled: 是否启用日志
+        level: 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        log_file: 日志文件路径（None 表示仅控制台输出）
+        log_dir: 日志目录（默认: logs/）
+    """
+    enabled: bool = True                       # 是否启用日志
+    level: str = "INFO"                        # 日志级别
+    log_file: str | None = None                # 日志文件路径
+    log_dir: str = "logs"                      # 日志目录
+
+
+@dataclass
 class ParserConfig:
     """主解析器配置
 
@@ -78,9 +96,11 @@ class ParserConfig:
         include_header_footer: 是否提取页眉页脚
         include_comments: 是否提取文档批注（⚠️ 当前版本未实现）
         include_footnotes: 是否提取文档脚注（⚠️ 当前版本未实现）
+        logging: 日志配置
+        logging: 日志配置
 
     Note:
-        include_comments、include_footnotes 配置项已预留，
+        include_comments 和 include_footnotes 配置项已预留，
         但当前版本尚未实现，设为 True 不会生效。
         include_header_footer 已实现，可直接使用。
     """
@@ -94,3 +114,4 @@ class ParserConfig:
     include_header_footer: bool = False          # 包含页眉页脚
     include_comments: bool = False               # 包含批注（⚠️ 未实现）
     include_footnotes: bool = False              # 包含脚注（⚠️ 未实现）
+    logging: LoggingConfig = field(default_factory=LoggingConfig)  # 日志配置

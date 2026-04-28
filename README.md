@@ -21,6 +21,7 @@
 | **公式转换** | OMML → LaTeX | ✅ 已实现 |
 | **目录生成** | 自动生成带锚点的 MD 目录 | ✅ 已实现 |
 | **降级机制** | LibreOffice 渲染 + 视觉模型降级 | ✅ 已实现 |
+| **ELK日志** | JSON格式结构化日志，便于监控分析 | ✅ 已实现 |
 
 ### 计划中功能
 
@@ -37,6 +38,7 @@
 - **多模态 AI**: 集成视觉模型（支持 Qwen3.5-4b 等全模态模型）
 - **两级降级**: XML+LLM → 渲染+视觉 → 失败标记
 - **并发处理**: 默认6并发，可配置
+- **ELK日志**: JSON格式结构化日志，便于接入监控分析平台
 - **CLI 工具**: 开箱即用的命令行工具
 
 ## 安装
@@ -151,6 +153,7 @@ print(f"图片数: {report.stats.total_images}")
 | `include_header_footer` | bool | False | 包含页眉页脚 |
 | `include_footnotes` | bool | False | 包含脚注（未实现） |
 | `include_comments` | bool | False | 包含批注（未实现） |
+| `logging` | LoggingConfig | LoggingConfig() | 日志配置 |
 
 ### MultimodalConfig
 
@@ -171,6 +174,15 @@ print(f"图片数: {report.stats.total_images}")
 | `timeout` | int | 600 | 超时时间（秒） |
 | `temperature` | float | 0.0 | 温度参数 |
 
+### LoggingConfig
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `enabled` | bool | True | 是否启用日志 |
+| `level` | str | "INFO" | 日志级别（DEBUG/INFO/WARNING/ERROR/CRITICAL） |
+| `log_file` | str \| None | None | 日志文件路径（None则按日期自动生成） |
+| `log_dir` | str | "logs" | 日志目录 |
+
 ## 项目结构
 
 ```
@@ -178,6 +190,7 @@ Document_Parsing/
 ├── wordparser/                      # 核心库
 │   ├── __init__.py                  # 主入口
 │   ├── config.py                    # 配置类
+│   ├── logger_config.py             # ELK日志配置
 │   ├── exceptions.py                # 异常体系
 │   ├── core/
 │   │   ├── models.py                # 数据模型
@@ -265,10 +278,14 @@ A: 确认已安装 LibreOffice，或通过 `--libreoffice-path` 指定路径。
 
 A: 使用 CLI 的 `-v` 参数查看详细输出和统计信息。
 
+### Q: 如何查看日志？
+
+A: 日志默认输出到 `logs/wordparser_YYYYMMDD.log`，JSON格式便于ELK分析。可通过 `LoggingConfig` 自定义。
+
 ## License
 
 MIT License
 
 ---
 
-*最后更新: 2026-04-27*
+*最后更新: 2026-04-28*

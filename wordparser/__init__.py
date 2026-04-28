@@ -7,6 +7,7 @@ from wordparser.config import *
 from wordparser.core.parser import WordParser
 from wordparser.core.report import ParseReport
 from wordparser.exceptions import *
+from wordparser.logger_config import setup_elk_logging, get_logger, get_context_logger
 
 __all__ = [
     "WordParser",
@@ -15,7 +16,11 @@ __all__ = [
     "MultimodalConfig",
     "VisionModelConfig",
     "TOCPosition",
+    "LoggingConfig",
     "parse_word_to_markdown",
+    "setup_elk_logging",
+    "get_logger",
+    "get_context_logger",
 ] + [name for name in dir() if name.endswith("Error") or name.endswith("Exception")]
 
 
@@ -49,6 +54,24 @@ def parse_word_to_markdown(
         >>> print(f"解析成功: {report.success}")
     """
     from pathlib import Path
+
+    # 初始化日志系统
+    if config is None:
+        from wordparser.config import ParserConfig
+        config = ParserConfig()
+
+    if config.logging.enabled:
+        import logging
+        log_level = getattr(logging, config.logging.level.upper(), logging.INFO)
+        log_file = None
+        if config.logging.log_file:
+            log_file = config.logging.log_file
+        elif config.logging.log_dir:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d")
+            log_file = f"{config.logging.log_dir}/wordparser_{timestamp}.log"
+
+        setup_elk_logging(level=log_level, log_file=log_file)
 
     docx_path = Path(docx_path)
     parser = WordParser(config)
