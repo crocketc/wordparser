@@ -34,6 +34,11 @@ def parse(
         "--output", "-o",
         help="输出Markdown文件路径（默认打印到 stdout）",
     ),
+    multimodal: bool = typer.Option(
+        _DEFAULT_MULTIMODAL.enabled,
+        "--multimodal/--no-multimodal",
+        help=f"是否启用多模态AI解析（图片/图表/SmartArt）（默认: {_DEFAULT_MULTIMODAL.enabled}）",
+    ),
     vision_url: Optional[str] = typer.Option(
         None,
         "--vision-url",
@@ -87,6 +92,7 @@ def parse(
         wordparser parse document.doc -o output.md
         wordparser parse document.docx --no-toc --max-heading 3
         wordparser parse document.docx --vision-url http://localhost:1234/v1
+        wordparser parse document.docx --no-multimodal
     """
     try:
         # 始终创建 MultimodalConfig，使用默认值或用户指定的值
@@ -95,6 +101,7 @@ def parse(
             model=vision_model or _DEFAULT_MULTIMODAL.model.model,
         )
         multimodal_config = MultimodalConfig(
+            enabled=multimodal,
             max_concurrent=max_concurrent,
             model=model_config,
         )

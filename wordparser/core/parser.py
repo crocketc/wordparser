@@ -62,7 +62,7 @@ class WordParser:
         )
 
         self.vision_client = None
-        if self.config.multimodal:
+        if self.config.multimodal and self.config.multimodal.enabled:
             from wordparser.multimodal.client import OpenAICompatibleVisionClient
             self.vision_client = OpenAICompatibleVisionClient(
                 base_url=self.config.multimodal.model.base_url,
@@ -285,6 +285,8 @@ class WordParser:
             return {}
 
         self._ensure_vision_client()
+        if not self.vision_client:
+            return {}
 
         from wordparser.multimodal.prompts import IMAGE_PROMPT
 
@@ -330,6 +332,8 @@ class WordParser:
     def _parse_complex_tables_parallel(self, doc, max_workers: int) -> dict[int, str]:
         """并行解析复杂表格（滑动窗口模式）"""
         self._ensure_vision_client()
+        if not self.vision_client:
+            return {}
 
         # 收集所有复杂表格
         complex_tables = []
@@ -385,6 +389,9 @@ class WordParser:
 
     def _ensure_vision_client(self) -> None:
         """延迟初始化 vision_client，从配置读取参数"""
+        is_enabled = self.config.multimodal and self.config.multimodal.enabled
+        if not is_enabled:
+            return
         if not self.vision_client:
             from wordparser.multimodal.client import OpenAICompatibleVisionClient
             # 从配置读取模型参数，默认使用 config.py 中的默认值
@@ -586,6 +593,9 @@ class WordParser:
         table_descs: dict[int, str] = None,
     ) -> str:
         """将占位符替换为实际的富内容描述"""
+        # 确定多模态是否启用
+        is_multimodal_enabled = self.config.multimodal and self.config.multimodal.enabled
+
         # 图片
         for rId, desc in image_descs.items():
             ph = _PH_IMG.format(rId)
@@ -611,8 +621,16 @@ class WordParser:
                 if ph in markdown:
                     markdown = markdown.replace(ph, self._wrap_multimodal_result(desc, "table"))
 
-        # 清理未替换的残留占位符
-        markdown = re.sub(r"\[__WP_(?:IMG|CHART|SA|TABLE)_[^\]]+__\]", "", markdown)
+        # 清理残留占位符：多模态禁用时用简单标记替换
+        if is_multimodal_enabled:
+            # 启用多模态：直接删除未解析的占位符
+            markdown = re.sub(r"\[__WP_(?:IMG|CHART|SA|TABLE)_[^\]]+__\]", "", markdown)
+        else:
+            # 禁用多模态：用简单标记替换
+            markdown = re.sub(r"\[__WP_IMG_([^\]]+?)__\]", r"\n[图片]\n", markdown)
+            markdown = re.sub(r"\[__WP_CHART_([^\]]+?)__\]", r"\n[图表]\n", markdown)
+            markdown = re.sub(r"\[__WP_SA_([^\]]+?)__\]", r"\n[SmartArt]\n", markdown)
+            markdown = re.sub(r"\[__WP_TABLE_([^\]]+?)__\]", r"\n[复杂表格]\n", markdown)
 
         return markdown
 
