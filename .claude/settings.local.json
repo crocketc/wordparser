@@ -73,7 +73,27 @@
       "Bash(curl -s http://localhost:1234/v1/models)",
       "Bash(pytest tests/test_formula_processor.py -v --tb=short)",
       "Bash(pytest tests/test_formula_processor.py -v --tb=line)",
-      "Bash(pytest tests/ -v --tb=line)"
+      "Bash(pytest tests/ -v --tb=line)",
+      "Bash(openspec new *)",
+      "Bash(openspec status *)",
+      "Bash(openspec instructions *)",
+      "Bash(openspec --version)",
+      "Bash(image\" \"tests/fixtures/安东石油技术（集团）有限公司2025年度第一期中期票据募集说明书.md\")",
+      "Bash(grep -c \"^```image\" \"tests/fixtures/安东石油技术（集团）有限公司2025年度第一期中期票据募集说明书.md\")",
+      "Bash(grep -c 'image$' \"tests/fixtures/安东石油技术（集团）有限公司2025年度第一期中期票据募集说明书.md\")",
+      "Bash(\"C:\\\\Program Files\\\\LibreOffice\\\\program\\\\soffice.exe\" --headless --convert-to docx --infilter=\"writer MS Word 97\" \"2024年度培训计划.doc\" --outdir .)",
+      "Bash(\"C:\\\\Program Files\\\\LibreOffice\\\\program\\\\soffice.exe\" --headless --help)",
+      "Bash(C:\\\\Program Files\\\\LibreOffice\\\\program\\\\soffice.exe *)",
+      "Bash(wordparser parse *)",
+      "Bash(git status *)",
+      "Bash(openspec list *)",
+      "Bash(unzip -l wordparser-src.zip)",
+      "Bash(mkdir -p /tmp/wordparser-clean)",
+      "Bash(rsync -av --exclude='.git' --exclude='.pytest_cache' --exclude='__pycache__' --exclude='*.pyc' --exclude='.claude' --exclude='logs' --exclude='.coverage' --exclude='htmlcov' --exclude='tests/fixtures' --exclude='test_soffice.py' . /tmp/wordparser-clean/)",
+      "Bash(rm -rf /tmp/wordparser-clean)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)"
     ]
   }
 }

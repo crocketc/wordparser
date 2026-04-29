@@ -50,11 +50,13 @@ class MultimodalConfig:
     控制图片、图表、SmartArt 等内容的多模态 AI 处理行为。
 
     Attributes:
+        enabled: 是否启用多模态解析（False 时跳过所有模型调用）
         max_concurrent: 最大并发请求数（同时处理多少个图片/图表）
         batch_delay: 批次之间的延迟时间（秒），避免 API 限流
         retry_on_failure: 失败时是否自动重试
         model: 视觉模型配置详情
     """
+    enabled: bool = True                         # 是否启用多模态解析
     max_concurrent: int = 6                      # 最大并发请求数
     batch_delay: float = 0.1                     # 批次延迟（秒）
     retry_on_failure: bool = True                # 失败时重试
@@ -77,7 +79,7 @@ class ManualHeadingConfig:
     """
     enabled: bool = True
     min_score: int = 4
-    max_length: int = 80
+    max_length: int = 30
     font_size_delta: float = 2.0
     bold_ratio_threshold: float = 0.8
 

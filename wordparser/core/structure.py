@@ -102,12 +102,14 @@ class ManualHeadingDetector:
         if self._is_known_non_heading(text):
             return None
 
+        # 硬性限制：超过 max_length 的文本不应该是标题
+        if len(text) > self.config.max_length:
+            return None
+
         score = 0
 
-        # 信号 1：短文本
-        is_short = len(text) <= self.config.max_length
-        if is_short:
-            score += 1
+        # 信号 1：短文本（此时已满足长度要求，直接加分）
+        score += 1
 
         # 信号 2：字号 >= 基准 + delta
         font_size = self._get_dominant_font_size(para)
@@ -422,6 +424,11 @@ class StructureParser:
     def _parse_cn_style_heading(self, para) -> ContentBlock:
         """解析中式标题样式段落，从文本编号推断层级"""
         text = para.text.strip()
+
+        # 长度检查：超过 max_length 降级为普通段落
+        if len(text) > self.config.manual_heading.max_length:
+            return self._parse_paragraph(para)
+
         anchor_text = _HEADING_NUMBER_RE.sub("", text).strip() or text
         anchor = make_anchor(anchor_text)
 
@@ -459,6 +466,11 @@ class StructureParser:
         level = self._extract_heading_level(style_name)
         text = para.text.strip()
         text = self._strip_heading_number(text)
+
+        # 长度检查：超过 max_length 降级为普通段落
+        if len(text) > self.config.manual_heading.max_length:
+            return self._parse_paragraph(para)
+
         anchor = make_anchor(text)
 
         node = TitleNode(level=level, text=text, anchor=anchor)
