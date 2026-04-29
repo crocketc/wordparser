@@ -19,7 +19,7 @@ class ELKJsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """格式化为JSON"""
         log_entry = {
-            "@timestamp": datetime.utcnow().isoformat() + "Z",
+            "@timestamp": datetime.now().isoformat(timespec="microseconds") + "+08:00",
             "level": record.levelname,
             "message": record.getMessage(),
             "logger_name": record.name,
