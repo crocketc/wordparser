@@ -15,14 +15,43 @@
 
 遵循 **研究 → 计划 → 实施 → 验证 → 提交** 五阶段流程。
 
+### OpenSpec 驱动开发
+
+项目已配置 OpenSpec（`openspec/`），变更管理遵循规范驱动流程：
+
+| 变更级别 | 触发条件 | 流程 |
+|---------|---------|------|
+| **只读** | 分析、解释、代码阅读 | 直接处理；需求模糊时先 `/opsx:explore` 梳理 |
+| **轻量** | 单文件修改、明确 bug 修复、配置调整 | `/opsx:propose` → 实现 → 验证 → `/opsx:verify` → `/opsx:archive` |
+| **中** | 多文件但边界清晰、新功能 | `/opsx:new` + `/opsx:ff` → brainstorming → 实现 → `/opsx:verify` → `/opsx:archive` |
+| **大** | 跨模块、新架构、公共 API 变更 | `/opsx:explore` → `/opsx:new` → `/opsx:continue` → brainstorming → writing-plans → executing-plans → `/opsx:verify` → `/opsx:archive` |
+
+### 强制铁律（项目适配版）
+
+1. **作者不自审** — 代码审查必须为独立上下文，不自审自修改的代码
+
+2. **无证据不称"完成"** — 声明完成前必须满足：
+   - ✅ 测试通过（`pytest`）
+   - ✅ 无类型错误（如有类型检查）
+   - 四个条件缺一不可
+
+3. **模糊先澄清** — 任何模糊需求必须先执行分析，再创建变更提案
+
+4. **危险命令先确认** — `rm -rf`、`DROP TABLE`、`force-push`、`git reset --hard` 等操作前必须明确风险与回滚方案
+
+5. **一个变更一个逻辑单元** — 非极简修改必须通过 `/opsx:propose` 或 `/opsx:new` 创建变更提案
+
+6. **变更前必须 `/opsx:verify`** — 校验完整性、正确性、一致性
+
 ### 分支策略
 - `main`: 主分支，保持稳定
 - 功能分支: `feat/xxx` 或 `fix/xxx`
-- 提交前必须通过测试
+- 大任务使用 Git Worktree 隔离（见下文）
 
 ### 代码审查
-- 所有代码变更需经过自我审查
+- 所有代码变更需经过独立审查
 - 使用 `simplify` skill 检查代码质量
+- 审查通过后方可提交
 
 ---
 
@@ -124,9 +153,43 @@ pytest tests/test_chart_extractor.py -v
 
 ---
 
-## 5. 项目特定经验沉淀
+## 5. 开发经验沉淀
 
-### BAT 文件编码问题（重要！）
+### 通用开发经验
+
+#### Edit 操作精确匹配
+`old_string` 仅匹配方法签名会导致方法体被删除，必须包含完整代码块。
+
+#### 设计规格完整性检查
+实现后对照设计规格逐项核对，注意公开 API 和编程接口。
+
+#### 变更命名规范
+动宾结构，如 `add-logout-button`/`fix-login-redirect`，禁止 `feature-1`/`update`。
+
+#### 调试四阶段
+不走瞎猜；严格执行：investigate → analyze → hypothesize → implement。
+
+#### 大任务防漂移
+用 executing-plans 的 checkpoint 每步对照 plan 验证。
+
+#### 代码复制粘贴后变量检查
+从一个方法复制模式到另一个方法时，必须逐行检查所有变量/参数是否与实际实现匹配。案例：`_parse_images_parallel` 需要 `img_ids` 参数检查，但 `_parse_complex_tables_parallel` 是直接遍历文档，复制时遗留了未定义的 `table_ids` 检查导致运行时错误。
+
+#### 华为 RCA 5-Why 法
+修 bug 不止修表面，必须追溯根因：
+1. 为什么报错？
+2. 为什么有这行？
+3. 设计差异在哪？
+4. 复制时漏了什么？
+5. 根本原因是什么？
+避免同类问题复发。
+
+#### TDD 开发方法
+红-绿-重构循环，测试先于实现。
+
+### 项目特定经验
+
+#### BAT 文件编码问题（重要！）
 
 **问题**: 双击 BAT 文件闪退，命令被截断，中文乱码。
 
@@ -138,30 +201,57 @@ with open('wordparser.bat', 'w', encoding='gbk', newline='\r\n') as f:
     f.write(bat_content)
 ```
 
-### Edit 操作必须精确匹配
-
-使用 Edit 工具时，`old_string` 必须包含完整的待替换代码块，不能只匹配方法签名。
-
-### 外部 API 限流处理
+#### 外部 API 限流处理
 
 多模态 API 调用需实现重试机制，失败时应有降级策略：
 - 实现 `multimodal/config.py` 的重试配置
 - 使用 `parallel.py` 的并发控制
 - 失败后记录日志，不中断主流程
 
-### LibreOffice 集成注意事项
+#### LibreOffice 集成注意事项
 
 - 路径检测: `renderer.py` 的 `_detect_libreoffice()`
 - Windows/macOS/Linux 路径差异
 - 退出 LibreOffice 进程: `--headless` + `--accept=...`
 
-### 设计规格完整性检查
+---
 
-实现完成后需对照 `docs/` 下的设计规格逐项核对，确保所有公开 API 和配置项完整。
+## 6. 安全底线
+
+- 密钥/凭证/API Key 不得硬编码
+- 配置通过环境变量或配置文件管理
+- 不用不可信输入拼接 shell 命令
+- 数据库访问用参数化查询（如有）
+- 外部 API 调用必须包含超时和重试机制
+- 敏感信息不得写入日志
 
 ---
 
-## 6. 关键文件快速索引
+## 7. OpenSpec 工具参考
+
+项目已配置 OpenSpec，常用命令：
+
+| 命令 | 用途 |
+|------|------|
+| `/opsx:explore` | 需求调研，梳理模糊需求 |
+| `/opsx:propose` | 创建轻量变更提案 |
+| `/opsx:new` | 创建新变更 |
+| `/opsx:ff` | 快速生成功能规范文档 |
+| `/opsx:continue` | 分步生成详细需求规格 |
+| `/opsx:apply [变更名]` | 切换到指定变更上下文 |
+| `/opsx:verify` | 验证规范符合度 |
+| `/opsx:archive` | 归档变更 |
+| `/opsx:sync` | 同步 specs 到主规范库 |
+| `openspec list` | 查看有效变更 |
+
+### OpenSpec 目录结构
+- `openspec/specs/`: 功能规范
+- `openspec/changes/`: 变更提案
+- `openspec/config.yaml`: OpenSpec 配置
+
+---
+
+## 8. 关键文件快速索引
 
 ### 配置文件
 - `pyproject.toml`: 项目依赖和元数据
@@ -183,7 +273,7 @@ with open('wordparser.bat', 'w', encoding='gbk', newline='\r\n') as f:
 
 ---
 
-## 7. 全局规范引用
+## 9. 全局规范引用
 
 以下规范来自全局 CLAUDE.md，项目必须遵守：
 
@@ -212,7 +302,7 @@ with open('wordparser.bat', 'w', encoding='gbk', newline='\r\n') as f:
 
 ---
 
-## 8. Git 提交规范
+## 10. Git 提交规范
 
 ### 提交信息格式
 ```
@@ -238,7 +328,7 @@ feat: 添加批注提取功能
 
 ---
 
-## 9. 相关资源
+## 11. 相关资源
 
 ### 设计文档
 - `docs/2026-04-22-word-parser-design.md`: 原始设计规格
