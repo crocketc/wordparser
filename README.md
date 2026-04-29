@@ -95,6 +95,9 @@ wordparser parse document.docx -o output.md --no-toc
 # 限制标题层级
 wordparser parse document.docx --max-heading 3
 
+# 关闭多模态 AI 解析（不调用模型）
+wordparser parse document.docx --no-multimodal
+
 # 配置多模态 API
 wordparser parse document.docx --vision-url http://localhost:1234/v1
 
@@ -123,6 +126,7 @@ config = ParserConfig(
     generate_toc=True,
     enable_render_fallback=True,
     multimodal=MultimodalConfig(
+        enabled=False,  # 关闭多模态 AI 解析，不调用模型
         max_concurrent=4,
         model=VisionModelConfig(
             base_url="http://localhost:1234/v1",
@@ -161,6 +165,7 @@ print(f"图片数: {report.stats.total_images}")
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
+| `enabled` | bool | True | 是否启用多模态 AI 解析，False 时跳过所有模型调用 |
 | `max_concurrent` | int | 6 | 最大并发数 |
 | `batch_delay` | float | 0.1 | 批次延迟（秒） |
 | `retry_on_failure` | bool | True | 失败重试 |
