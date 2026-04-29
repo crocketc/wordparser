@@ -193,7 +193,7 @@ md_content, report = parse_word_to_markdown("document.docx")
 md_content, report = parse_word_to_markdown("document.docx", "output.md")
 
 # 使用自定义配置
-from wordparser.config import ParserConfig
+from wordparser.config import ParserConfig, MultimodalConfig
 
 config = ParserConfig(
     max_heading_level=6,
@@ -201,6 +201,9 @@ config = ParserConfig(
     encoding="utf-8",
     enable_render_fallback=True,
     libreoffice_path=None,  # 自动检测
+    multimodal=MultimodalConfig(
+        enabled=False,  # 关闭多模态 AI 解析，不调用模型
+    ),
 )
 md_content, report = parse_word_to_markdown("document.docx", config=config)
 ```
@@ -232,6 +235,9 @@ wordparser.bat parse document.docx -o output.md --max-heading 3
 
 # 详细输出
 wordparser.bat parse document.docx -o output.md -v
+
+# 关闭多模态 AI 解析（不调用模型，图片/图表显示为占位符）
+wordparser.bat parse document.docx --no-multimodal
 
 # 配置多模态
 wordparser.bat parse document.docx --vision-url http://localhost:1234/v1
@@ -298,16 +304,31 @@ from wordparser.config import VisionModelConfig, MultimodalConfig, ParserConfig
 # 使用默认配置（见 config.py）
 config = ParserConfig()
 
+# 关闭多模态 AI 解析
+config = ParserConfig(
+    multimodal=MultimodalConfig(enabled=False)
+)
+
 # 或覆盖部分配置
 config = ParserConfig(
     multimodal=MultimodalConfig(
-        max_concurrent=6,  # 覆盖默认值
+        enabled=True,  # 是否启用多模态解析（默认: True）
+        max_concurrent=6,  # 最大并发请求数
         model=VisionModelConfig(
             base_url="http://localhost:1234/v1",
         ),
     ),
 )
 ```
+
+### 配置项说明
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `enabled` | bool | True | 是否启用多模态 AI 解析，False 时跳过所有模型调用 |
+| `max_concurrent` | int | 6 | 最大并发请求数 |
+| `model.base_url` | str | http://localhost:1234/v1 | 多模态 API 服务地址 |
+| `model.model` | str | qwen3.5-4b | 模型名称 |
 
 ### 可用模型
 
