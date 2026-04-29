@@ -18,29 +18,12 @@
 
 ---
 
-## 1. OpenSpec 驱动开发
+## 1. OpenSpec 配置
 
-项目已配置 OpenSpec（`openspec/`），变更管理遵循规范驱动流程：
+项目已配置 OpenSpec，变更流程遵循 DEVELOPMENT.md 中的任务分级规范。
 
-| 变更级别 | 触发条件 | 流程 |
-|---------|---------|------|
-| **只读** | 分析、解释、代码阅读 | 直接处理；需求模糊时先 `/opsx:explore` |
-| **轻量** | 单文件修改、明确 bug 修复 | `/opsx:propose` → 实现 → 验证 → `/opsx:verify` → `/opsx:archive` |
-| **中** | 多文件但边界清晰、新功能 | `/opsx:new` + `/opsx:ff` → brainstorming → 实现 → `/opsx:verify` → `/opsx:archive` |
-| **大** | 跨模块、新架构、公共 API 变更 | `/opsx:explore` → `/opsx:new` → `/opsx:continue` → writing-plans → executing-plans → `/opsx:verify` → `/opsx:archive` |
-
-### OpenSpec 常用命令
-
-| 命令 | 用途 |
-|------|------|
-| `/opsx:explore` | 需求调研，梳理模糊需求 |
-| `/opsx:propose` | 创建轻量变更提案 |
-| `/opsx:new` | 创建新变更 |
-| `/opsx:ff` | 快速生成功能规范文档 |
-| `/opsx:continue` | 分步生成详细需求规格 |
-| `/opsx:apply [变更名]` | 切换到指定变更上下文 |
-| `/opsx:verify` | 验证规范符合度 |
-| `/opsx:archive` | 归档变更 |
+- 规范目录: `openspec/specs/wordparser-core/spec.md`
+- 变更目录: `openspec/changes/`
 
 ### 分支策略
 - `main`: 主分支，保持稳定
