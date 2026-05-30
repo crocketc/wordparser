@@ -31,7 +31,7 @@ class OpenAICompatibleVisionClient:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: str = "llava",
-        max_tokens: int = 1000,
+        max_tokens: int = 4000,
         temperature: float = 0.7,
         timeout: int = 600,
     ):
